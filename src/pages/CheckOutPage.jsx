@@ -8,8 +8,15 @@ import apiClient from "../services/api";
 const CheckoutPage = () => {
   const navigate = useNavigate();
   const { tenantId, user } = useContext(AppContext);
-  const { cartItems, totalPrice, totalQuantity, clearCart } =
-    useContext(CartContext);
+
+  // HIMOYA: cartItems topilmasa, undefined bo'lib qolmasligi uchun default [] beramiz
+  const {
+    cartItems = [],
+    totalPrice = 0,
+    totalQuantity = 0,
+    clearCart,
+  } = useContext(CartContext) || {};
+
   const { tg, showMainButton, hideMainButton } = useTelegram();
 
   const [formData, setFormData] = useState({
@@ -18,32 +25,35 @@ const CheckoutPage = () => {
     deliveryAddress: "",
   });
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const handleInputChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  // Buyurtma yuborish funksiyasi (useCallback xatolar oldini oladi)
   const submitOrder = useCallback(async () => {
     if (!formData.customerPhone || !formData.deliveryAddress) {
-      tg.showAlert("Iltimos, barcha maydonlarni to'ldiring!");
+      tg.showAlert("Iltimos, telefon raqam va manzilni kiriting!");
       return;
     }
 
+    setIsSubmitting(true);
     tg.MainButton.showProgress();
 
     try {
       const orderPayload = {
         tenantId: tenantId,
-        telegramId: user?.id,
+        telegramId: user?.id || 123456789,
         customerName: formData.customerName,
         customerPhone: formData.customerPhone,
         items: cartItems.map((item) => ({
           productId: item._id,
-          name: item.name, // PDF chek uchun ismini ham yuboramiz
+          name: item.name,
           quantity: item.quantity,
           price: item.price,
         })),
         totalPrice: totalPrice,
+        deliveryType: "DELIVERY",
         deliveryAddress: { text: formData.deliveryAddress },
         paymentMethod: "CASH",
       };
@@ -51,22 +61,25 @@ const CheckoutPage = () => {
       const response = await apiClient.post("/orders", orderPayload);
 
       if (response.success) {
-        tg.showConfirm("Buyurtma qabul qilindi! Adminga xabar berildi.", () => {
+        tg.showConfirm("Buyurtmangiz qabul qilindi! Savat tozalanadi.", () => {
           clearCart();
           tg.close();
         });
       }
     } catch (error) {
-      tg.showAlert("Backend bilan aloqa o'rnatib bo'lmadi!");
+      console.error("[CHECKOUT ERROR]", error);
+      tg.showAlert("Xatolik yuz berdi. Iltimos qayta urinib ko'ring.");
     } finally {
+      setIsSubmitting(false);
       tg.MainButton.hideProgress();
     }
   }, [formData, cartItems, tenantId, user, totalPrice, tg, clearCart]);
 
   useEffect(() => {
-    if (cartItems.length === 0) {
-      navigate("/");
-      return;
+    // Savat bo'sh bo'lsa yoki context hali yuklanmagan bo'lsa
+    if (!cartItems || cartItems.length === 0) {
+      const timer = setTimeout(() => navigate("/"), 500);
+      return () => clearTimeout(timer);
     }
 
     showMainButton(
@@ -82,86 +95,111 @@ const CheckoutPage = () => {
     cartItems,
     totalPrice,
     submitOrder,
-    tg,
     navigate,
     showMainButton,
     hideMainButton,
+    tg,
   ]);
 
   return (
-    <div
-      style={{
-        padding: "20px",
-        backgroundColor: "#f5f5f5",
-        minHeight: "100vh",
-      }}
-    >
+    <div style={containerStyle}>
       <button onClick={() => navigate("/")} style={backBtnStyle}>
         ← Menyu
       </button>
+      <h2 style={{ margin: "15px 0" }}>Buyurtmani tasdiqlash</h2>
 
-      <h2 style={{ margin: "10px 0" }}>Rasmiylashtirish</h2>
-
-      <div style={cardStyle}>
-        <p>
-          Mahsulotlar: <b>{totalQuantity} ta</b>
-        </p>
-        <p>
-          Jami summa:{" "}
-          <b style={{ color: "#FF9800" }}>{totalPrice.toLocaleString()} so'm</b>
-        </p>
+      <div style={infoCardStyle}>
+        <div style={infoRow}>
+          <span>Jami mahsulotlar:</span>
+          <b>{totalQuantity} ta</b>
+        </div>
+        <div style={infoRow}>
+          <span>Umumiy summa:</span>
+          <b style={{ color: "#FF9800", fontSize: "1.1rem" }}>
+            {totalPrice.toLocaleString()} so'm
+          </b>
+        </div>
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-        <input
-          type="text"
-          name="customerName"
-          placeholder="Ismingiz"
-          value={formData.customerName}
-          onChange={handleInputChange}
-          style={inputStyle}
-        />
-        <input
-          type="tel"
-          name="customerPhone"
-          placeholder="Telefon (+998...)"
-          value={formData.customerPhone}
-          onChange={handleInputChange}
-          style={inputStyle}
-        />
-        <textarea
-          name="deliveryAddress"
-          placeholder="Manzil va mo'ljal"
-          value={formData.deliveryAddress}
-          onChange={handleInputChange}
-          style={{ ...inputStyle, minHeight: "80px" }}
-        />
+      <div style={formStyle}>
+        <div style={inputGroup}>
+          <label style={labelStyle}>Ismingiz</label>
+          <input
+            type="text"
+            name="customerName"
+            placeholder="Ismingizni kiriting"
+            value={formData.customerName}
+            onChange={handleInputChange}
+            style={inputStyle}
+          />
+        </div>
+
+        <div style={inputGroup}>
+          <label style={labelStyle}>Telefon raqamingiz</label>
+          <input
+            type="tel"
+            name="customerPhone"
+            placeholder="+998 90 123 45 67"
+            value={formData.customerPhone}
+            onChange={handleInputChange}
+            style={inputStyle}
+          />
+        </div>
+
+        <div style={inputGroup}>
+          <label style={labelStyle}>Yetkazib berish manzili</label>
+          <textarea
+            name="deliveryAddress"
+            placeholder="Uy, ko'cha, mo'ljal..."
+            value={formData.deliveryAddress}
+            onChange={handleInputChange}
+            style={{ ...inputStyle, minHeight: "80px", resize: "none" }}
+          />
+        </div>
       </div>
     </div>
   );
 };
 
-// --- Styles ---
+// --- Inline Styles (Sizning dizayningizga mos) ---
+const containerStyle = {
+  padding: "20px",
+  paddingBottom: "100px",
+  backgroundColor: "#f8f9fa",
+  minHeight: "100vh",
+};
 const backBtnStyle = {
   border: "none",
   background: "none",
   color: "#FF9800",
   fontWeight: "bold",
-  padding: "5px 0",
+  fontSize: "16px",
+  marginBottom: "15px",
+  cursor: "pointer",
 };
-const cardStyle = {
+const infoCardStyle = {
   backgroundColor: "#fff",
   padding: "15px",
   borderRadius: "12px",
+  boxShadow: "0 2px 10px rgba(0,0,0,0.05)",
   marginBottom: "20px",
-  boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
 };
+const infoRow = {
+  display: "flex",
+  justifyContent: "space-between",
+  marginBottom: "8px",
+};
+const formStyle = { display: "flex", flexDirection: "column", gap: "15px" };
+const inputGroup = { display: "flex", flexDirection: "column", gap: "5px" };
+const labelStyle = { fontSize: "14px", color: "#666", fontWeight: "500" };
 const inputStyle = {
   width: "100%",
   padding: "12px",
   borderRadius: "10px",
   border: "1px solid #ddd",
+  fontSize: "16px",
   outline: "none",
+  boxSizing: "border-box",
 };
 
 export default CheckoutPage;
