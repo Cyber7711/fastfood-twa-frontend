@@ -2,16 +2,24 @@ import React, { useContext } from "react";
 import { CartContext } from "../context/CartContext";
 
 const ProductCard = ({ product }) => {
-  const { cart, addToCart, removeFromCart } = useContext(CartContext);
+  // 1. cart emas, cartItems deb yozamiz.
+  // Shuningdek, xatolikni oldini olish uchun {} || {} himoyasini qo'shamiz
+  const {
+    cartItems = [],
+    addToCart,
+    removeFromCart,
+  } = useContext(CartContext) || {};
 
-  // Savatda shu mahsulotdan nechta borligini topamiz
-  const cartItem = cart.find((item) => item._id === product._id);
+  // 2. cartItems massiv ekanligiga ishonch hosil qilamiz (HIMOYA)
+  const cartItem = Array.isArray(cartItems)
+    ? cartItems.find((item) => item._id === product._id)
+    : null;
+
   const quantity = cartItem ? cartItem.quantity : 0;
 
   return (
-    // fade-in-card animatsiyani chaqirib oldik
     <div className="product-card fade-in-card">
-      {/* 1. Rasm qismi (kattaroq va chiroyli) */}
+      {/* 1. Rasm qismi */}
       <div
         style={{
           width: "100%",
@@ -47,7 +55,6 @@ const ProductCard = ({ product }) => {
           {product.name}
         </h3>
 
-        {/* Ta'rif (Description) - 2 qatordan oshib ketsa uch nuqta bo'lib qoladi */}
         <p
           style={{
             margin: "0 0 10px 0",
@@ -63,7 +70,6 @@ const ProductCard = ({ product }) => {
           {product.description}
         </p>
 
-        {/* Narx */}
         <div
           style={{
             fontWeight: "bold",
