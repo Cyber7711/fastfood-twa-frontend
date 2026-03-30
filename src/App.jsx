@@ -7,7 +7,7 @@ import { CartProvider } from "./context/CartContext";
 
 // 2. Sahifalarni chaqiramiz
 import MenuPage from "./pages/MenuPage";
-import CheckoutPage from "./pages/CheckoutPage"; // <-- IZOHDAN CHIQARDIK!
+import CheckoutPage from "./pages/CheckOutPage";
 
 const App = () => {
   console.log("[APP] Dastur ishga tushmoqda... React DOM chizilmoqda.");
