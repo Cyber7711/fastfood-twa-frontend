@@ -28,8 +28,8 @@ const MenuPage = () => {
 
     try {
       const [categoriesData, productsData] = await Promise.all([
-        apiClient.get("/categories"),
-        apiClient.get("/products"),
+        apiClient.get("/menu/categories"), // "/categories" o'rniga "/menu/categories"
+        apiClient.get("/menu/products"), // "/products" o'rniga "/menu/products"
       ]);
 
       setCategories(categoriesData || []);
