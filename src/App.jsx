@@ -6,7 +6,7 @@ import { AppProvider } from "./context/AppContext";
 import { CartProvider } from "./context/CartContext";
 
 import MenuPage from "./pages/MenuPage";
-import CheckoutPage from "./pages/CheckoutPage";
+import CheckoutPage from "./pages/CheckOutPage";
 
 const App = () => {
   console.log("[APP] Dastur ishga tushmoqda... React DOM chizilmoqda.");
