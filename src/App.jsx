@@ -1,11 +1,12 @@
 import React from "react";
-import { HashRouter, Routes, Route } from "react-router-dom";
+// HashRouter o'rniga BrowserRouter chaqiramiz:
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 import { AppProvider } from "./context/AppContext";
 import { CartProvider } from "./context/CartContext";
 
 import MenuPage from "./pages/MenuPage";
-import CheckoutPage from "./pages/CheckOutPage";
+import CheckoutPage from "./pages/CheckoutPage";
 
 const App = () => {
   console.log("[APP] Dastur ishga tushmoqda... React DOM chizilmoqda.");
@@ -13,7 +14,8 @@ const App = () => {
   return (
     <AppProvider>
       <CartProvider>
-        <HashRouter>
+        {/* HashRouter o'rniga BrowserRouter ishlatamiz */}
+        <BrowserRouter>
           <div
             className="app-container"
             style={{
@@ -28,7 +30,7 @@ const App = () => {
               <Route path="/checkout" element={<CheckoutPage />} />
             </Routes>
           </div>
-        </HashRouter>
+        </BrowserRouter>
       </CartProvider>
     </AppProvider>
   );
