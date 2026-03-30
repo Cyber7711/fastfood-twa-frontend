@@ -7,17 +7,17 @@ import { CartProvider } from "./context/CartContext";
 
 // 2. Sahifalarni chaqiramiz
 import MenuPage from "./pages/MenuPage";
-// import CheckoutPage from './pages/CheckoutPage'; // Buni keyingi qadamda yaratamiz
+import CheckoutPage from "./pages/CheckoutPage"; // <-- IZOHDAN CHIQARDIK!
 
 const App = () => {
   console.log("[APP] Dastur ishga tushmoqda... React DOM chizilmoqda.");
 
   return (
-    // 1-qavat: Telegram va Do'kon ID sini (tenantId) butun dasturga tarqatadi
+    /* 1-qavat: Telegram va Do'kon ID sini (tenantId) butun dasturga tarqatadi */
     <AppProvider>
-      // 2-qavat: Savat tizimi (Buyurtmalar xotirasi)
+      /* 2-qavat: Savat tizimi (Buyurtmalar xotirasi) */
       <CartProvider>
-        // 3-qavat: Sahifalar o'rtasida xavfsiz harakatlanish
+        /* 3-qavat: Sahifalar o'rtasida xavfsiz harakatlanish */
         <HashRouter>
           <div
             className="app-container"
@@ -33,7 +33,7 @@ const App = () => {
               {/* Asosiy (bosh) sahifaga MenuPage ni bog'ladik */}
               <Route path="/" element={<MenuPage />} />
 
-              {/* Kelajakdagi Checkout sahifasi uchun joy tayyorlab qo'ydik */}
+              {/* Checkout sahifasi */}
               <Route path="/checkout" element={<CheckoutPage />} />
             </Routes>
           </div>
