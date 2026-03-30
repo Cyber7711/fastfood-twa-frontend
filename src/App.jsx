@@ -5,6 +5,7 @@ import { CartProvider } from "./context/CartContext";
 import PageWrapper from "./components/PageWrapper";
 import MenuPage from "./pages/MenuPage";
 import CheckoutPage from "./pages/CheckOutPage";
+import AdminPage from "./pages/AdminPage";
 
 const App = () => {
   return (
