@@ -1,22 +1,20 @@
 import { useEffect, useState } from "react";
 
 // Telegram Web App obyekti index.html ga qo'shilgan script orqali keladi
-const tg = window.Telegram.WebApp;
+const tg = window.Telegram?.WebApp || {};
 
 export function useTelegram() {
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    // TWA to'liq yuklanganda Telegramga xabar beramiz
-    tg.ready();
-    setIsReady(true);
-
-    // Debugging uchun muhim log: Foydalanuvchi ma'lumotlari keldimi?
-    console.log("[TELEGRAM HOOK] TWA ishga tushdi.", {
-      initDataUnsafe: tg.initDataUnsafe,
-      themeParams: tg.themeParams,
-      version: tg.version,
-    });
+    if (tg.ready) {
+      tg.ready();
+      console.log("[TELEGRAM HOOK] TWA muvaffaqiyatli yuklandi.");
+    } else {
+      console.warn(
+        "[TELEGRAM HOOK] Telegram topilmadi (Brauzerda ochilgan bo'lishi mumkin)",
+      );
+    }
   }, []);
 
   // Ilovani yopish funksiyasi
