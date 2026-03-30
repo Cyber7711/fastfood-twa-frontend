@@ -126,3 +126,44 @@ code {
   animation: pulse 1.5s infinite ease-in-out;
   border-radius: 8px;
 }
+/* 1. Kirish animatsiyasi (Pastdan yumshoq o'sib chiqish) */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(15px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.fade-in-card {
+  animation: fadeInUp 0.4s ease-out forwards;
+}
+
+/* 2. Tugmalarni bosganda qisqarish (Mobile Tap effekti) */
+.tap-effect {
+  transition:
+    transform 0.1s ease,
+    background-color 0.2s ease;
+}
+
+.tap-effect:active {
+  transform: scale(0.92); /* Bosganda 8% ga kichrayadi */
+}
+
+/* Mahsulot kartochkasi uchun zamonaviy soya */
+.product-card {
+  background-color: #fff;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+  transition: box-shadow 0.2s ease;
+}
+
+.product-card:hover {
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
+}

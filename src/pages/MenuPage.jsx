@@ -144,15 +144,21 @@ const MenuPage = () => {
         {categories.map((cat) => (
           <button
             key={cat._id}
+            className="tap-effect" // <-- Mobile bosilish effekti
             onClick={() => setActiveCategory(cat._id)}
             style={{
-              padding: "8px 16px",
+              padding: "8px 18px",
               borderRadius: "20px",
               border: "none",
               whiteSpace: "nowrap",
-              backgroundColor:
-                activeCategory === cat._id ? "#FF9800" : "#f0f0f0",
-              color: activeCategory === cat._id ? "#fff" : "#000",
+              fontSize: "14px",
+              fontWeight: activeCategory === cat._id ? "bold" : "normal",
+              backgroundColor: activeCategory === cat._id ? "#FF9800" : "#fff",
+              color: activeCategory === cat._id ? "#fff" : "#555",
+              boxShadow:
+                activeCategory === cat._id
+                  ? "0 4px 8px rgba(255,152,0,0.3)"
+                  : "0 2px 4px rgba(0,0,0,0.05)",
               cursor: "pointer",
             }}
           >

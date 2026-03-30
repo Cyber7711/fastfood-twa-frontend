@@ -1,130 +1,147 @@
 import React, { useContext } from "react";
-import { CartContext } from "../context/CartContext"; // Miyani chaqiramiz
+import { CartContext } from "../context/CartContext";
 
 const ProductCard = ({ product }) => {
-  // 1. Context'dan kerakli funksiya va ma'lumotlarni olamiz
-  const { cartItems, addToCart, removeFromCart } = useContext(CartContext);
+  const { cart, addToCart, removeFromCart } = useContext(CartContext);
 
-  // 2. Ushbu aniq mahsulot savatda bormi? Agar bo'lsa soni (quantity) nechta?
-  const cartItem = cartItems.find((item) => item._id === product._id);
+  // Savatda shu mahsulotdan nechta borligini topamiz
+  const cartItem = cart.find((item) => item._id === product._id);
   const quantity = cartItem ? cartItem.quantity : 0;
 
   return (
-    <div
-      style={{
-        border: "1px solid #eaeaea",
-        borderRadius: "12px",
-        padding: "10px",
-        display: "flex",
-        flexDirection: "column",
-        backgroundColor: "#fff",
-      }}
-    >
-      {/* Rasm */}
-      <img
-        src={product.imageUrl || "https://via.placeholder.com/150"}
-        alt={product.name}
+    // fade-in-card animatsiyani chaqirib oldik
+    <div className="product-card fade-in-card">
+      {/* 1. Rasm qismi (kattaroq va chiroyli) */}
+      <div
         style={{
           width: "100%",
-          height: "120px",
-          objectFit: "cover",
-          borderRadius: "8px",
+          height: "140px",
+          overflow: "hidden",
+          backgroundColor: "#f9f9f9",
         }}
-      />
+      >
+        <img
+          src={product.imageUrl}
+          alt={product.name}
+          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+        />
+      </div>
 
-      {/* Ma'lumotlar */}
-      <h3 style={{ fontSize: "16px", margin: "10px 0 5px 0" }}>
-        {product.name}
-      </h3>
-      <p
+      {/* 2. Ma'lumotlar qismi */}
+      <div
         style={{
-          color: "#888",
-          fontSize: "12px",
-          margin: "0 0 10px 0",
+          padding: "12px",
+          display: "flex",
+          flexDirection: "column",
           flexGrow: 1,
         }}
       >
-        {product.description?.substring(0, 40)}...
-      </p>
+        <h3
+          style={{
+            margin: "0 0 4px 0",
+            fontSize: "15px",
+            fontWeight: "bold",
+            color: "#333",
+          }}
+        >
+          {product.name}
+        </h3>
 
-      {/* Narx va Boshqaruv tugmalari */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginTop: "auto",
-        }}
-      >
-        <span style={{ fontWeight: "bold" }}>
-          {product.price.toLocaleString()} so'm
-        </span>
+        {/* Ta'rif (Description) - 2 qatordan oshib ketsa uch nuqta bo'lib qoladi */}
+        <p
+          style={{
+            margin: "0 0 10px 0",
+            fontSize: "12px",
+            color: "#888",
+            flexGrow: 1,
+            display: "-webkit-box",
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: "vertical",
+            overflow: "hidden",
+          }}
+        >
+          {product.description}
+        </p>
 
-        {/* Agar savatda bo'lsa - [1] + qilib ko'rsatamiz, yo'qsa faqat + */}
-        {quantity > 0 ? (
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            {/* Ayirish tugmasi */}
-            <button
-              onClick={() => {
-                console.log(`[UI] "-" bosildi: ${product.name}`);
-                removeFromCart(product._id);
-              }}
-              style={buttonStyle}
-            >
-              -
-            </button>
+        {/* Narx */}
+        <div
+          style={{
+            fontWeight: "bold",
+            fontSize: "15px",
+            color: "#FF9800",
+            marginBottom: "12px",
+          }}
+        >
+          {product.price.toLocaleString("uz-UZ")} so'm
+        </div>
 
-            {/* Soni */}
-            <span style={{ fontWeight: "bold", fontSize: "16px" }}>
-              {quantity}
-            </span>
-
-            {/* Qo'shish tugmasi */}
-            <button
-              onClick={() => {
-                console.log(`[UI] "+" bosildi (yana): ${product.name}`);
-                addToCart(product);
-              }}
-              style={buttonStyle}
-            >
-              +
-            </button>
-          </div>
-        ) : (
-          /* Birinchi marta qo'shish tugmasi */
+        {/* 3. Savatga qo'shish yoki Ayirish/Qo'shish tugmalari */}
+        {quantity === 0 ? (
           <button
-            onClick={() => {
-              console.log(`[UI] "Qo'shish" bosildi: ${product.name}`);
-              addToCart(product);
-            }}
+            className="tap-effect"
+            onClick={() => addToCart(product)}
             style={{
-              ...buttonStyle,
-              padding: "0 15px",
-              width: "auto",
-              borderRadius: "20px",
+              backgroundColor: "#FF9800",
+              color: "#fff",
+              border: "none",
+              borderRadius: "10px",
+              padding: "10px",
+              fontSize: "14px",
+              fontWeight: "bold",
+              width: "100%",
+              cursor: "pointer",
             }}
           >
             Qo'shish
           </button>
+        ) : (
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
+            <button
+              className="tap-effect"
+              onClick={() => removeFromCart(product._id)}
+              style={{
+                backgroundColor: "#f0f0f0",
+                border: "none",
+                borderRadius: "8px",
+                width: "35px",
+                height: "35px",
+                fontSize: "18px",
+                fontWeight: "bold",
+                color: "#333",
+              }}
+            >
+              -
+            </button>
+            <span style={{ fontWeight: "bold", fontSize: "16px" }}>
+              {quantity}
+            </span>
+            <button
+              className="tap-effect"
+              onClick={() => addToCart(product)}
+              style={{
+                backgroundColor: "#FF9800",
+                color: "#fff",
+                border: "none",
+                borderRadius: "8px",
+                width: "35px",
+                height: "35px",
+                fontSize: "18px",
+                fontWeight: "bold",
+              }}
+            >
+              +
+            </button>
+          </div>
         )}
       </div>
     </div>
   );
-};
-
-// Takrorlanmasligi uchun tugma dizaynini alohida o'zgaruvchiga oldik
-const buttonStyle = {
-  backgroundColor: "#FF9800",
-  color: "white",
-  border: "none",
-  borderRadius: "50%",
-  width: "30px",
-  height: "30px",
-  cursor: "pointer",
-  fontSize: "18px",
-  display: "flex",
-  justifyContent: "center",
-  alignItems: "center",
 };
 
 export default ProductCard;
