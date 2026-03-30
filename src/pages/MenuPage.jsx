@@ -21,19 +21,21 @@ const MenuPage = () => {
       setIsLoading(true);
 
       try {
-        const [categoriesRes, productsRes] = await Promise.all([
+        const [categoriesData, productsData] = await Promise.all([
           apiClient.get("/categories"),
           apiClient.get("/products"),
         ]);
 
-        console.log("[MENU PAGE] ✅ Kategoriyalar keldi:", categoriesRes.data);
-        console.log("[MENU PAGE] ✅ Mahsulotlar keldi:", productsRes.data);
+        // .data olib tashlandi, chunki apiClient o'zi toza datani qaytaradi!
+        console.log("[MENU PAGE] ✅ Kategoriyalar keldi:", categoriesData);
+        console.log("[MENU PAGE] ✅ Mahsulotlar keldi:", productsData);
 
-        setCategories(categoriesRes.data || []);
-        setProducts(productsRes.data || []);
+        setCategories(categoriesData || []);
+        setProducts(productsData || []);
 
-        if (categoriesRes.data && categoriesRes.data.length > 0) {
-          setActiveCategory(categoriesRes.data[0]._id);
+        // Birinchi kategoriyani faol (active) qilib qo'yamiz
+        if (categoriesData && categoriesData.length > 0) {
+          setActiveCategory(categoriesData[0]._id);
         }
       } catch (err) {
         console.error("[MENU PAGE] ❌ Xato:", err);
