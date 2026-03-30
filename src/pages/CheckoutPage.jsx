@@ -9,7 +9,6 @@ const CheckoutPage = () => {
   const navigate = useNavigate();
   const { tenantId, user } = useContext(AppContext);
 
-  // HIMOYA: cartItems topilmasa, undefined bo'lib qolmasligi uchun default [] beramiz
   const {
     cartItems = [],
     totalPrice = 0,
@@ -27,13 +26,18 @@ const CheckoutPage = () => {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Input o'zgarishi
   const handleInputChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+  // Buyurtma yuborish
   const submitOrder = useCallback(async () => {
     if (!formData.customerPhone || !formData.deliveryAddress) {
-      tg.showAlert("Iltimos, telefon raqam va manzilni kiriting!");
+      tg.showAlert(
+        "Iltimos, telefon raqam va yetkazib berish manzilini to'ldiring!",
+      );
       return;
     }
 
@@ -42,48 +46,51 @@ const CheckoutPage = () => {
 
     try {
       const orderPayload = {
-        tenantId: tenantId,
+        tenantId,
         telegramId: user?.id || 123456789,
-        customerName: formData.customerName,
-        customerPhone: formData.customerPhone,
+        customerName: formData.customerName.trim(),
+        customerPhone: formData.customerPhone.trim(),
         items: cartItems.map((item) => ({
           productId: item._id,
           name: item.name,
           quantity: item.quantity,
           price: item.price,
         })),
-        totalPrice: totalPrice,
+        totalPrice,
         deliveryType: "DELIVERY",
-        deliveryAddress: { text: formData.deliveryAddress },
+        deliveryAddress: { text: formData.deliveryAddress.trim() },
         paymentMethod: "CASH",
       };
 
       const response = await apiClient.post("/orders", orderPayload);
 
       if (response.success) {
-        tg.showConfirm("Buyurtmangiz qabul qilindi! Savat tozalanadi.", () => {
-          clearCart();
-          tg.close();
-        });
+        tg.showConfirm(
+          "✅ Buyurtmangiz muvaffaqiyatli qabul qilindi!\nSavat tozalanmoqda...",
+          () => {
+            clearCart();
+            tg.close();
+          },
+        );
       }
     } catch (error) {
       console.error("[CHECKOUT ERROR]", error);
-      tg.showAlert("Xatolik yuz berdi. Iltimos qayta urinib ko'ring.");
+      tg.showAlert("Xatolik yuz berdi. Iltimos, qayta urinib ko'ring.");
     } finally {
       setIsSubmitting(false);
       tg.MainButton.hideProgress();
     }
   }, [formData, cartItems, tenantId, user, totalPrice, tg, clearCart]);
 
+  // Telegram tugmasi va redirect
   useEffect(() => {
-    // Savat bo'sh bo'lsa yoki context hali yuklanmagan bo'lsa
     if (!cartItems || cartItems.length === 0) {
-      const timer = setTimeout(() => navigate("/"), 500);
+      const timer = setTimeout(() => navigate("/"), 800);
       return () => clearTimeout(timer);
     }
 
     showMainButton(
-      `TASDIQLASH: ${totalPrice.toLocaleString()} so'm`,
+      `TASDIQLASH — ${totalPrice.toLocaleString("ru-RU")} so'm`,
       submitOrder,
     );
 
@@ -101,105 +108,88 @@ const CheckoutPage = () => {
     tg,
   ]);
 
-  return (
-    <div style={containerStyle}>
-      <button onClick={() => navigate("/")} style={backBtnStyle}>
-        ← Menyu
-      </button>
-      <h2 style={{ margin: "15px 0" }}>Buyurtmani tasdiqlash</h2>
+  // Agar savat bo'sh bo'lsa hech narsa ko'rsatmaymiz
+  if (!cartItems || cartItems.length === 0) {
+    return null;
+  }
 
-      <div style={infoCardStyle}>
-        <div style={infoRow}>
-          <span>Jami mahsulotlar:</span>
-          <b>{totalQuantity} ta</b>
+  return (
+    <div className="min-h-screen bg-gray-50 pb-28 px-4 pt-4">
+      <button
+        onClick={() => navigate("/")}
+        className="flex items-center gap-2 text-orange-500 font-semibold text-lg mb-6 hover:text-orange-600 transition-colors"
+      >
+        ← Menyuga qaytish
+      </button>
+
+      <h1 className="text-2xl font-bold text-gray-900 mb-6">
+        Buyurtmani tasdiqlash
+      </h1>
+
+      {/* Buyurtma haqida qisqa ma'lumot */}
+      <div className="bg-white rounded-2xl p-5 shadow-sm mb-6">
+        <div className="flex justify-between py-3 border-b border-gray-100">
+          <span className="text-gray-600">Jami mahsulotlar</span>
+          <span className="font-semibold">{totalQuantity} ta</span>
         </div>
-        <div style={infoRow}>
-          <span>Umumiy summa:</span>
-          <b style={{ color: "#FF9800", fontSize: "1.1rem" }}>
-            {totalPrice.toLocaleString()} so'm
-          </b>
+        <div className="flex justify-between py-3">
+          <span className="text-gray-600">Umumiy summa</span>
+          <span className="font-bold text-2xl text-orange-500">
+            {totalPrice.toLocaleString("ru-RU")} so'm
+          </span>
         </div>
       </div>
 
-      <div style={formStyle}>
-        <div style={inputGroup}>
-          <label style={labelStyle}>Ismingiz</label>
+      {/* Form */}
+      <div className="space-y-6">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Ismingiz
+          </label>
           <input
             type="text"
             name="customerName"
             placeholder="Ismingizni kiriting"
             value={formData.customerName}
             onChange={handleInputChange}
-            style={inputStyle}
+            className="w-full px-4 py-3.5 bg-white border border-gray-200 rounded-2xl focus:outline-none focus:border-orange-400"
           />
         </div>
 
-        <div style={inputGroup}>
-          <label style={labelStyle}>Telefon raqamingiz</label>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Telefon raqamingiz <span className="text-red-500">*</span>
+          </label>
           <input
             type="tel"
             name="customerPhone"
             placeholder="+998 90 123 45 67"
             value={formData.customerPhone}
             onChange={handleInputChange}
-            style={inputStyle}
+            className="w-full px-4 py-3.5 bg-white border border-gray-200 rounded-2xl focus:outline-none focus:border-orange-400"
           />
         </div>
 
-        <div style={inputGroup}>
-          <label style={labelStyle}>Yetkazib berish manzili</label>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Yetkazib berish manzili <span className="text-red-500">*</span>
+          </label>
           <textarea
             name="deliveryAddress"
-            placeholder="Uy, ko'cha, mo'ljal..."
+            placeholder="Ko'cha, uy raqami, mo'ljal..."
             value={formData.deliveryAddress}
             onChange={handleInputChange}
-            style={{ ...inputStyle, minHeight: "80px", resize: "none" }}
+            rows={3}
+            className="w-full px-4 py-3.5 bg-white border border-gray-200 rounded-2xl focus:outline-none focus:border-orange-400 resize-none"
           />
         </div>
       </div>
+
+      <p className="text-center text-gray-500 text-sm mt-10">
+        To'lov yetkazib berish paytida naqd pul orqali amalga oshiriladi
+      </p>
     </div>
   );
-};
-
-// --- Inline Styles (Sizning dizayningizga mos) ---
-const containerStyle = {
-  padding: "20px",
-  paddingBottom: "100px",
-  backgroundColor: "#f8f9fa",
-  minHeight: "100vh",
-};
-const backBtnStyle = {
-  border: "none",
-  background: "none",
-  color: "#FF9800",
-  fontWeight: "bold",
-  fontSize: "16px",
-  marginBottom: "15px",
-  cursor: "pointer",
-};
-const infoCardStyle = {
-  backgroundColor: "#fff",
-  padding: "15px",
-  borderRadius: "12px",
-  boxShadow: "0 2px 10px rgba(0,0,0,0.05)",
-  marginBottom: "20px",
-};
-const infoRow = {
-  display: "flex",
-  justifyContent: "space-between",
-  marginBottom: "8px",
-};
-const formStyle = { display: "flex", flexDirection: "column", gap: "15px" };
-const inputGroup = { display: "flex", flexDirection: "column", gap: "5px" };
-const labelStyle = { fontSize: "14px", color: "#666", fontWeight: "500" };
-const inputStyle = {
-  width: "100%",
-  padding: "12px",
-  borderRadius: "10px",
-  border: "1px solid #ddd",
-  fontSize: "16px",
-  outline: "none",
-  boxSizing: "border-box",
 };
 
 export default CheckoutPage;

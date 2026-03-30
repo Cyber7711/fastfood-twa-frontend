@@ -1,66 +1,80 @@
-import React, { useState, useEffect, useContext, useMemo } from "react";
+import React, {
+  useState,
+  useEffect,
+  useContext,
+  useMemo,
+  useCallback,
+} from "react";
 import { AppContext } from "../context/AppContext";
 import apiClient from "../services/api";
 import ProductCard from "../components/ProductCard";
-import FastFoodLoader from "../components/Loader"; // O'zimizning "Burger" loader
+import FastFoodLoader from "../components/Loader";
 
 const MenuPage = () => {
   const { tenantId } = useContext(AppContext);
+
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
   const [activeCategory, setActiveCategory] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    const fetchMenuData = async () => {
-      if (!tenantId) return;
+  // Ma'lumotlarni yuklash
+  const fetchMenuData = useCallback(async () => {
+    if (!tenantId) return;
 
-      setIsLoading(true);
-      try {
-        // Ikkala so'rovni parallel yuboramiz (Tezroq yuklanadi)
-        const [categoriesData, productsData] = await Promise.all([
-          apiClient.get("/categories"),
-          apiClient.get("/products"),
-        ]);
+    setIsLoading(true);
+    setError(null);
 
-        setCategories(categoriesData || []);
-        setProducts(productsData || []);
+    try {
+      const [categoriesData, productsData] = await Promise.all([
+        apiClient.get("/categories"),
+        apiClient.get("/products"),
+      ]);
 
-        // Birinchi kategoriyani avtomatik tanlash
-        if (categoriesData && categoriesData.length > 0) {
-          setActiveCategory(categoriesData[0]._id);
-        }
-      } catch (err) {
-        console.error("[MENU PAGE] ❌ Xato:", err);
-        setError("Menyuni yuklashda xatolik yuz berdi.");
-      } finally {
-        // Animatsiyani foydalanuvchi ko'rishi uchun biroz ushlab turamiz
-        setTimeout(() => setIsLoading(false), 600);
+      setCategories(categoriesData || []);
+      setProducts(productsData || []);
+
+      // Birinchi kategoriyani avtomatik tanlash
+      if (categoriesData?.length > 0) {
+        setActiveCategory(categoriesData[0]._id);
       }
-    };
-
-    fetchMenuData();
+    } catch (err) {
+      console.error("[MENU PAGE] ❌ Xato:", err);
+      setError(
+        "Menyuni yuklashda xatolik yuz berdi. Iltimos, qayta urinib ko‘ring.",
+      );
+    } finally {
+      setTimeout(() => setIsLoading(false), 650);
+    }
   }, [tenantId]);
 
-  // Mahsulotlarni filtrlash (useMemo hisoblashni optimallashtiradi)
+  useEffect(() => {
+    fetchMenuData();
+  }, [fetchMenuData]);
+
+  // Tanlangan kategoriyaga mos mahsulotlarni filtrlash
   const filteredProducts = useMemo(() => {
     if (!activeCategory) return products;
     return products.filter((p) => p.categoryId === activeCategory);
   }, [products, activeCategory]);
 
-  // 1. Yuklanish holati (Siz aytgan Loader)
-  if (isLoading) return <FastFoodLoader />;
+  // Yuklanish holati
+  if (isLoading) {
+    return <FastFoodLoader />;
+  }
 
-  // 2. Xatolik holati
+  // Xatolik holati
   if (error) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] p-6 text-center">
-        <div className="text-4xl mb-4">⚠️</div>
-        <p className="text-red-500 font-bold">{error}</p>
+      <div className="flex flex-col items-center justify-center min-h-[70vh] p-6 text-center">
+        <div className="text-6xl mb-6">⚠️</div>
+        <p className="text-red-600 font-semibold text-lg mb-6 max-w-xs">
+          {error}
+        </p>
         <button
           onClick={() => window.location.reload()}
-          className="mt-4 px-6 py-2 bg-orange-500 text-white rounded-xl font-bold"
+          className="px-8 py-3.5 bg-orange-500 hover:bg-orange-600 active:bg-orange-700 text-white font-bold rounded-2xl transition-all active:scale-95 shadow-lg shadow-orange-200"
         >
           Qayta urinish
         </button>
@@ -70,19 +84,18 @@ const MenuPage = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
-      {/* --- KATEGORIYALAR (Sticky header) --- */}
-      <div className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-gray-100 shadow-sm">
-        <div className="flex overflow-x-auto no-scrollbar py-4 px-4 gap-3">
+      {/* Sticky Kategoriyalar */}
+      <div className="sticky top-0 z-40 bg-white/95 backdrop-blur-xl border-b border-gray-100 shadow-sm">
+        <div className="flex overflow-x-auto no-scrollbar py-5 px-4 gap-3 scrollbar-hide">
           {categories.map((cat) => (
             <button
               key={cat._id}
               onClick={() => setActiveCategory(cat._id)}
-              className={`
-                whitespace-nowrap px-6 py-2.5 rounded-2xl text-sm font-black tracking-tight transition-all duration-300 tap-effect
+              className={`whitespace-nowrap px-7 py-3 rounded-3xl text-sm font-bold tracking-tight transition-all duration-300 active:scale-95 tap-effect flex-shrink-0
                 ${
                   activeCategory === cat._id
-                    ? "bg-orange-500 text-white shadow-lg shadow-orange-200 scale-105"
-                    : "bg-white text-gray-500 border border-gray-100 hover:bg-gray-50"
+                    ? "bg-orange-500 text-white shadow-xl shadow-orange-300 scale-105"
+                    : "bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 hover:border-gray-300"
                 }
               `}
             >
@@ -92,27 +105,30 @@ const MenuPage = () => {
         </div>
       </div>
 
-      {/* --- MAHSULOTLAR GRID --- */}
+      {/* Asosiy kontent */}
       <div className="p-4">
         {filteredProducts.length > 0 ? (
-          <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="grid grid-cols-2 gap-4 pb-6">
             {filteredProducts.map((product) => (
               <ProductCard key={product._id} product={product} />
             ))}
           </div>
         ) : (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
-            <div className="text-6xl mb-4 opacity-30">🍕</div>
-            <p className="text-gray-400 font-medium italic">
-              Bu bo'limda hozircha mahsulot yo'q...
+          <div className="flex flex-col items-center justify-center py-28 text-center">
+            <div className="text-[92px] mb-6 opacity-30">🍔</div>
+            <p className="text-gray-400 font-medium text-xl">
+              Bu bo‘limda hozircha mahsulot yo‘q
+            </p>
+            <p className="text-gray-400 text-sm mt-2">
+              Boshqa kategoriyani tanlab ko‘ring
             </p>
           </div>
         )}
       </div>
 
-      {/* --- BOTTOM FLOATING STATS (Optional) --- */}
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40">
-        {/* Bu yerda savatga o'tish tugmasi chiqadi (CartContext orqali) */}
+      {/* Floating Cart Area (kelajakda savat tugmasi qo‘shiladi) */}
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
+        {/* Cart button shu yerga qo‘yiladi */}
       </div>
     </div>
   );
