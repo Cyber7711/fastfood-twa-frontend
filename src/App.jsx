@@ -1,31 +1,37 @@
 import React from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import PageWrapper from "./components/PageWrapper"; // Yangi wrapper
+import { AppProvider } from "./context/AppContext";
+import { CartProvider } from "./context/CartContext";
+import PageWrapper from "./components/PageWrapper";
 import MenuPage from "./pages/MenuPage";
 import CheckoutPage from "./pages/CheckOutPage";
 
 const App = () => {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route
-          path="/"
-          element={
-            <PageWrapper>
-              <MenuPage />
-            </PageWrapper>
-          }
-        />
-        <Route
-          path="/checkout"
-          element={
-            <PageWrapper>
-              <CheckoutPage />
-            </PageWrapper>
-          }
-        />
-      </Routes>
-    </BrowserRouter>
+    <AppProvider>
+      <CartProvider>
+        <BrowserRouter>
+          <Routes>
+            <Route
+              path="/"
+              element={
+                <PageWrapper>
+                  <MenuPage />
+                </PageWrapper>
+              }
+            />
+            <Route
+              path="/checkout"
+              element={
+                <PageWrapper>
+                  <CheckoutPage />
+                </PageWrapper>
+              }
+            />
+          </Routes>
+        </BrowserRouter>
+      </CartProvider>
+    </AppProvider>
   );
 };
 
