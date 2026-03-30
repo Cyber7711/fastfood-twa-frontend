@@ -48,12 +48,77 @@ const MenuPage = () => {
     fetchMenuData();
   }, [tenantId]);
 
-  if (isLoading)
+  // ZERIKARLI YUKLANISH O'RNIGA ZAMONAVIY SKELETON LOADER
+  if (isLoading) {
     return (
-      <div style={{ textAlign: "center", padding: "50px" }}>
-        Yuklanmoqda... ⏳
+      <div className="menu-page" style={{ padding: "10px" }}>
+        {/* Tepadagi kategoriyalar uchun miltillovchi qutilar */}
+        <div
+          style={{
+            display: "flex",
+            gap: "10px",
+            marginBottom: "20px",
+            overflowX: "hidden",
+          }}
+        >
+          {[1, 2, 3, 4].map((i) => (
+            <div
+              key={i}
+              className="skeleton-box"
+              style={{ minWidth: "80px", height: "35px", borderRadius: "20px" }}
+            ></div>
+          ))}
+        </div>
+
+        {/* Mahsulotlar uchun miltillovchi kartochkalar */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: "15px",
+          }}
+        >
+          {[1, 2, 3, 4].map((i) => (
+            <div
+              key={i}
+              style={{
+                border: "1px solid #eee",
+                borderRadius: "15px",
+                padding: "10px",
+                backgroundColor: "#fff",
+              }}
+            >
+              {/* Rasm o'rni */}
+              <div
+                className="skeleton-box"
+                style={{
+                  width: "100%",
+                  height: "120px",
+                  borderRadius: "10px",
+                  marginBottom: "10px",
+                }}
+              ></div>
+              {/* Sarlavha o'rni */}
+              <div
+                className="skeleton-box"
+                style={{ width: "80%", height: "15px", marginBottom: "8px" }}
+              ></div>
+              {/* Narx o'rni */}
+              <div
+                className="skeleton-box"
+                style={{ width: "50%", height: "15px", marginBottom: "15px" }}
+              ></div>
+              {/* Tugma o'rni */}
+              <div
+                className="skeleton-box"
+                style={{ width: "100%", height: "32px", borderRadius: "8px" }}
+              ></div>
+            </div>
+          ))}
+        </div>
       </div>
     );
+  }
   if (error)
     return (
       <div style={{ color: "red", textAlign: "center", padding: "20px" }}>
