@@ -2,14 +2,10 @@
 export default {
   content: [
     "./index.html",
-    "./src/**/*.{js,ts,jsx,tsx}", // SHU QATOR BORLIGINI TEKSHIRING
+    "./src/**/*.{js,ts,jsx,tsx}", // Bu qator barcha JSX fayllarni qamrab oladi
   ],
   theme: {
-    extend: {
-      colors: {
-        brand: "#FF9800", // O'zimizning fast-food rangimiz
-      },
-    },
+    extend: {},
   },
   plugins: [],
 };

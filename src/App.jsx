@@ -28,6 +28,14 @@ const App = () => {
                 </PageWrapper>
               }
             />
+            <Route
+              path="/admin"
+              element={
+                <PageWrapper>
+                  <AdminPage />
+                </PageWrapper>
+              }
+            />
           </Routes>
         </BrowserRouter>
       </CartProvider>
