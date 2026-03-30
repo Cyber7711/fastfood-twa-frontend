@@ -4,8 +4,8 @@ import { AppProvider } from "./context/AppContext";
 import { CartProvider } from "./context/CartContext";
 import PageWrapper from "./components/PageWrapper";
 import MenuPage from "./pages/MenuPage";
-import CheckoutPage from "./pages/CheckOutPage";
-import AdminPage from "./pages/AdminPage";
+import CheckoutPage from "./pages/CheckoutPage"; // 'CheckOutPage' emas, 'CheckoutPage'ligini tekshiring
+import AdminPage from "./pages/AdminPage"; // <--- SHU QATORGA DIQQAT QILING!
 
 const App = () => {
   return (
