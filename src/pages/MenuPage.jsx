@@ -53,7 +53,7 @@ const MenuPage = () => {
     fetchMenuData();
   }, [fetchMenuData]);
 
-  // Tanlangan kategoriyaga mos mahsulotlarni filtrlash
+  // Filtrlash
   const filteredProducts = useMemo(() => {
     if (!activeCategory) return products;
     return products.filter((p) => p.categoryId === activeCategory);
@@ -84,7 +84,7 @@ const MenuPage = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
-      {/* Sticky Kategoriyalar */}
+      {/* Sticky Kategoriyalar Header */}
       <div className="sticky top-0 z-40 bg-white/95 backdrop-blur-xl border-b border-gray-100 shadow-sm">
         <div className="flex overflow-x-auto no-scrollbar py-5 px-4 gap-3 scrollbar-hide">
           {categories.map((cat) => (
@@ -108,11 +108,19 @@ const MenuPage = () => {
       {/* Asosiy kontent */}
       <div className="p-4">
         {filteredProducts.length > 0 ? (
-          <div className="grid grid-cols-2 gap-4 pb-6">
-            {filteredProducts.map((product) => (
-              <ProductCard key={product._id} product={product} />
-            ))}
-          </div>
+          <>
+            <div className="mb-4 px-1">
+              <p className="text-gray-500 text-sm">
+                {filteredProducts.length} ta mahsulot
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 pb-6">
+              {filteredProducts.map((product) => (
+                <ProductCard key={product._id} product={product} />
+              ))}
+            </div>
+          </>
         ) : (
           <div className="flex flex-col items-center justify-center py-28 text-center">
             <div className="text-[92px] mb-6 opacity-30">🍔</div>
@@ -126,9 +134,9 @@ const MenuPage = () => {
         )}
       </div>
 
-      {/* Floating Cart Area (kelajakda savat tugmasi qo‘shiladi) */}
+      {/* Floating Cart Area (kelajak uchun joy) */}
       <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
-        {/* Cart button shu yerga qo‘yiladi */}
+        {/* Bu yerga savat tugmasi qo‘yiladi */}
       </div>
     </div>
   );

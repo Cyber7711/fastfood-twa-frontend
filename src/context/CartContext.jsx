@@ -1,15 +1,24 @@
-import React, { createContext, useState, useEffect } from "react";
+import React, {
+  createContext,
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+} from "react";
 import { useTelegram } from "../hooks/useTelegram";
 
+// Context yaratish
 export const CartContext = createContext();
 
 export const CartProvider = ({ children }) => {
   const [cartItems, setCartItems] = useState([]);
   const { showMainButton, hideMainButton, tg } = useTelegram();
 
-  const addToCart = (product) => {
+  // Savatga qo'shish
+  const addToCart = useCallback((product) => {
     setCartItems((prevItems) => {
       const existingItem = prevItems.find((item) => item._id === product._id);
+
       if (existingItem) {
         return prevItems.map((item) =>
           item._id === product._id
@@ -17,75 +26,90 @@ export const CartProvider = ({ children }) => {
             : item,
         );
       }
+
       return [...prevItems, { ...product, quantity: 1 }];
     });
-  };
+  }, []);
 
-  const removeFromCart = (productId) => {
+  // Savatdan olib tashlash / kamaytirish
+  const removeFromCart = useCallback((productId) => {
     setCartItems((prevItems) => {
       const existingItem = prevItems.find((item) => item._id === productId);
+
       if (!existingItem) return prevItems;
+
       if (existingItem.quantity === 1) {
         return prevItems.filter((item) => item._id !== productId);
       }
+
       return prevItems.map((item) =>
         item._id === productId
           ? { ...item, quantity: item.quantity - 1 }
           : item,
       );
     });
-  };
+  }, []);
 
-  // BU FUNKSIYA QOLIB KETGAN EDI:
-  const clearCart = () => {
+  // Butun savatni tozalash
+  const clearCart = useCallback(() => {
     console.log("[CART CONTEXT] 🧹 Savat tozalandi.");
     setCartItems([]);
-  };
+  }, []);
 
-  const totalPrice = cartItems.reduce(
-    (acc, item) => acc + item.price * item.quantity,
-    0,
-  );
-  const totalQuantity = cartItems.reduce((acc, item) => acc + item.quantity, 0);
+  // Hisob-kitoblar (optimallashtirilgan)
+  const totalPrice = useMemo(() => {
+    return cartItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
+  }, [cartItems]);
 
-  // MainButton boshqaruvi
+  const totalQuantity = useMemo(() => {
+    return cartItems.reduce((acc, item) => acc + item.quantity, 0);
+  }, [cartItems]);
+
+  // Telegram Main Button boshqaruvi
   useEffect(() => {
-    if (totalQuantity > 0) {
-      // Diqqat: Bu tugma faqat "/" (Menyu) sahifasida chiqishi kerak.
-      // CheckoutPage o'z tugmasini o'zi boshqaradi.
-      if (window.location.hash === "#/" || window.location.pathname === "/") {
-        showMainButton(
-          `Savatga o'tish: ${totalPrice.toLocaleString()} so'm`,
-          () => {
-            window.location.href = window.location.origin + "/checkout";
-          },
-        );
-      }
+    // Faqat menyu sahifasida Main Button chiqsin
+    const isMenuPage =
+      window.location.pathname === "/" ||
+      window.location.hash === "#/" ||
+      window.location.pathname === "";
+
+    if (totalQuantity > 0 && isMenuPage) {
+      showMainButton(
+        `Savatga o'tish • ${totalPrice.toLocaleString("ru-RU")} so'm`,
+        () => {
+          window.location.href = "/checkout";
+        },
+      );
     } else {
       hideMainButton();
     }
-    return () => tg.MainButton.offClick();
-  }, [
-    cartItems,
-    totalPrice,
-    totalQuantity,
-    showMainButton,
-    hideMainButton,
-    tg,
-  ]);
+
+    // Cleanup
+    return () => {
+      tg.MainButton.offClick();
+    };
+  }, [totalQuantity, totalPrice, showMainButton, hideMainButton, tg]);
+
+  const contextValue = useMemo(
+    () => ({
+      cartItems,
+      addToCart,
+      removeFromCart,
+      clearCart,
+      totalPrice,
+      totalQuantity,
+    }),
+    [
+      cartItems,
+      addToCart,
+      removeFromCart,
+      clearCart,
+      totalPrice,
+      totalQuantity,
+    ],
+  );
 
   return (
-    <CartContext.Provider
-      value={{
-        cartItems,
-        addToCart,
-        removeFromCart,
-        clearCart,
-        totalPrice,
-        totalQuantity,
-      }}
-    >
-      {children}
-    </CartContext.Provider>
+    <CartContext.Provider value={contextValue}>{children}</CartContext.Provider>
   );
 };
