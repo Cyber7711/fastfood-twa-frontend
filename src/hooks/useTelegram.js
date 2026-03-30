@@ -9,7 +9,14 @@ export function useTelegram() {
   useEffect(() => {
     if (tg.ready) {
       tg.ready();
-      console.log("[TELEGRAM HOOK] TWA muvaffaqiyatli yuklandi.");
+
+      // MANA SHU QATOR QO'SHILDI: Ekranni to'liq balandlikda ochish
+      tg.expand();
+
+      console.log(
+        "[TELEGRAM HOOK] TWA muvaffaqiyatli yuklandi va ekran kengaytirildi.",
+      );
+      setIsReady(true);
     } else {
       console.warn(
         "[TELEGRAM HOOK] Telegram topilmadi (Brauzerda ochilgan bo'lishi mumkin)",
@@ -23,7 +30,7 @@ export function useTelegram() {
     tg.close();
   };
 
-  // Asosiy tugmani (MainButton) boshqarish funksiyasi (Masalan: "Buyurtma berish")
+  // Asosiy tugmani (MainButton) boshqarish funksiyasi
   const showMainButton = (text, onClickCallback) => {
     console.log(`[TELEGRAM HOOK] MainButton ko'rsatildi: ${text}`);
     tg.MainButton.setText(text);
@@ -41,11 +48,11 @@ export function useTelegram() {
   };
 
   return {
-    tg, // Asosiy obyektni qaytaramiz (agar chuqurroq funksiyalar kerak bo'lsa)
-    user: tg.initDataUnsafe?.user, // Foydalanuvchi ma'lumotlari (ism, id)
-    initData: tg.initData, // Backendga xavfsizlik tekshiruvi (Auth) uchun yuboriladigan qator
+    tg,
+    user: tg.initDataUnsafe?.user,
+    initData: tg.initData,
     queryId: tg.initDataUnsafe?.query_id,
-    themeParams: tg.themeParams, // Telegramning joriy ranglari (Dark/Light mode)
+    themeParams: tg.themeParams,
     onClose,
     showMainButton,
     hideMainButton,
