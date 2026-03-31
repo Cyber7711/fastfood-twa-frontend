@@ -11,7 +11,6 @@ import { CartContext } from "../context/CartContext";
 import { useTelegram } from "../hooks/useTelegram";
 import apiClient from "../services/api";
 
-// Toshkent tumanlari ro'yxati (Kelajakda API dan ham olish mumkin)
 const TASHKENT_DISTRICTS = [
   "Bektemir",
   "Chilonzor",
@@ -24,7 +23,7 @@ const TASHKENT_DISTRICTS = [
   "Yakkasaroy",
   "Yashnobod",
   "Yunusobod",
-  "Zangiota", // Ba'zan Toshkent shahriga xizmat ko'rsatadi
+  "Zangiota",
   "Yangihayot",
 ];
 
@@ -41,17 +40,17 @@ const CheckoutPage = () => {
 
   const { tg, showMainButton, hideMainButton } = useTelegram();
 
-  // Form state'ni tuman va aniq manzilga ajratdik
   const [formData, setFormData] = useState({
     customerName: user?.first_name || "",
     customerPhone: "",
-    district: "", // Tuman uchun yangi maydon
-    addressDetails: "", // Ko'cha, uy, mo'ljal
+    district: "",
+    addressDetails: "",
   });
 
+  // 1. Yangi State: Xatolarni ushlab turish uchun
+  const [fieldErrors, setFieldErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // TWA qopqonini aylanib o'tish
   const formDataRef = useRef(formData);
   useEffect(() => {
     formDataRef.current = formData;
@@ -60,18 +59,30 @@ const CheckoutPage = () => {
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+
+    // Foydalanuvchi yoza boshlaganda o'sha maydondagi xatoni o'chirib tashlaymiz (UX uchun)
+    if (fieldErrors[name]) {
+      setFieldErrors((prev) => ({ ...prev, [name]: null }));
+    }
   };
 
   const submitOrder = useCallback(async () => {
     const currentData = formDataRef.current;
 
-    // Validatsiyani kuchaytiramiz
-    if (
-      !currentData.customerPhone ||
-      !currentData.district ||
-      !currentData.addressDetails
-    ) {
-      tg.showAlert("Iltimos, telefon raqam va manzilni to'liq kiriting!");
+    // Har bir yangi so'rovdan oldin xatolarni tozalaymiz
+    setFieldErrors({});
+
+    // Frontend oddiy tekshiruvi (bo'sh qolganini tekshirish)
+    let localErrors = {};
+    if (!currentData.customerPhone)
+      localErrors.customerPhone = "Telefon raqam kiritilishi shart";
+    if (!currentData.district) localErrors.district = "Tuman tanlanishi shart";
+    if (!currentData.addressDetails)
+      localErrors.addressDetails = "Manzil kiritilishi shart";
+
+    if (Object.keys(localErrors).length > 0) {
+      setFieldErrors(localErrors);
+      tg.showAlert("Iltimos, qizil bilan belgilangan maydonlarni to'ldiring!");
       return;
     }
 
@@ -79,7 +90,6 @@ const CheckoutPage = () => {
     tg.MainButton.showProgress();
 
     try {
-      // Manzilni backend uchun chiroyli qilib birlashtiramiz
       const fullAddress = `${currentData.district} tumani, ${currentData.addressDetails.trim()}`;
 
       const orderPayload = {
@@ -95,7 +105,7 @@ const CheckoutPage = () => {
         })),
         totalPrice: Number(totalPrice),
         deliveryType: "DELIVERY",
-        deliveryAddress: { text: fullAddress }, // Birlashtirilgan manzil ketadi
+        deliveryAddress: { text: fullAddress },
         paymentMethod: "CASH",
       };
 
@@ -114,7 +124,24 @@ const CheckoutPage = () => {
       }
     } catch (error) {
       console.error("[CHECKOUT ERROR]", error);
-      tg.showAlert("Xatolik yuz berdi. Iltimos, qayta urinib ko'ring.");
+
+      // 2. Backenddan kelgan (Zod) xatolarini ushlash va UI ga bog'lash
+      if (error.response?.data?.details) {
+        const errors = {};
+        error.response.data.details.forEach((err) => {
+          // err.field orqali kelgan xatoni mos inputga ulaymiz
+          errors[err.field] = err.message;
+        });
+        setFieldErrors(errors);
+        tg.showAlert(
+          "Ma'lumotlarda xatolik bor. Iltimos tekshirib qayta urinib ko'ring.",
+        );
+      } else {
+        tg.showAlert(
+          error.response?.data?.message ||
+            "Xatolik yuz berdi. Iltimos, qayta urinib ko'ring.",
+        );
+      }
     } finally {
       setIsSubmitting(false);
       tg.MainButton.hideProgress();
@@ -178,6 +205,7 @@ const CheckoutPage = () => {
       </div>
 
       <div className="space-y-4">
+        {/* Ism */}
         <div>
           <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 ml-1">
             Ismingiz
@@ -188,10 +216,18 @@ const CheckoutPage = () => {
             placeholder="Ismingizni kiriting"
             value={formData.customerName}
             onChange={handleInputChange}
-            className="w-full px-4 py-4 bg-white border border-gray-100 rounded-2xl focus:outline-none focus:border-orange-500 font-bold text-gray-800 transition-colors shadow-sm"
+            className={`w-full px-4 py-4 bg-white border ${
+              fieldErrors.customerName ? "border-red-500" : "border-gray-100"
+            } rounded-2xl focus:outline-none focus:border-orange-500 font-bold text-gray-800 transition-colors shadow-sm`}
           />
+          {fieldErrors.customerName && (
+            <p className="text-red-500 text-[10px] font-bold mt-2 ml-2 animate-in fade-in">
+              ⚠️ {fieldErrors.customerName}
+            </p>
+          )}
         </div>
 
+        {/* Telefon raqam */}
         <div>
           <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 ml-1">
             Telefon raqam <span className="text-orange-500">*</span>
@@ -202,8 +238,15 @@ const CheckoutPage = () => {
             placeholder="+998 90 123 45 67"
             value={formData.customerPhone}
             onChange={handleInputChange}
-            className="w-full px-4 py-4 bg-white border border-gray-100 rounded-2xl focus:outline-none focus:border-orange-500 font-bold text-gray-800 transition-colors shadow-sm"
+            className={`w-full px-4 py-4 bg-white border ${
+              fieldErrors.customerPhone ? "border-red-500" : "border-gray-100"
+            } rounded-2xl focus:outline-none focus:border-orange-500 font-bold text-gray-800 transition-colors shadow-sm`}
           />
+          {fieldErrors.customerPhone && (
+            <p className="text-red-500 text-[10px] font-bold mt-2 ml-2 animate-in fade-in">
+              ⚠️ {fieldErrors.customerPhone}
+            </p>
+          )}
         </div>
 
         {/* Tuman tanlash (Kategoriya) */}
@@ -216,7 +259,9 @@ const CheckoutPage = () => {
               name="district"
               value={formData.district}
               onChange={handleInputChange}
-              className="w-full px-4 py-4 bg-white border border-gray-100 rounded-2xl focus:outline-none focus:border-orange-500 font-bold text-gray-800 transition-colors shadow-sm appearance-none"
+              className={`w-full px-4 py-4 bg-white border ${
+                fieldErrors.district ? "border-red-500" : "border-gray-100"
+              } rounded-2xl focus:outline-none focus:border-orange-500 font-bold text-gray-800 transition-colors shadow-sm appearance-none`}
             >
               <option value="" disabled>
                 Toshkent shahri...
@@ -227,7 +272,6 @@ const CheckoutPage = () => {
                 </option>
               ))}
             </select>
-            {/* Custom yoycha (arrow) */}
             <div className="absolute inset-y-0 right-4 flex items-center pointer-events-none">
               <svg
                 className="w-5 h-5 text-gray-400"
@@ -244,6 +288,11 @@ const CheckoutPage = () => {
               </svg>
             </div>
           </div>
+          {fieldErrors.district && (
+            <p className="text-red-500 text-[10px] font-bold mt-2 ml-2 animate-in fade-in">
+              ⚠️ {fieldErrors.district}
+            </p>
+          )}
         </div>
 
         {/* Aniq manzil kiritish */}
@@ -257,8 +306,15 @@ const CheckoutPage = () => {
             value={formData.addressDetails}
             onChange={handleInputChange}
             rows={2}
-            className="w-full px-4 py-4 bg-white border border-gray-100 rounded-2xl focus:outline-none focus:border-orange-500 font-bold text-gray-800 transition-colors shadow-sm resize-none placeholder:font-medium placeholder:text-gray-400"
+            className={`w-full px-4 py-4 bg-white border ${
+              fieldErrors.addressDetails ? "border-red-500" : "border-gray-100"
+            } rounded-2xl focus:outline-none focus:border-orange-500 font-bold text-gray-800 transition-colors shadow-sm resize-none placeholder:font-medium placeholder:text-gray-400`}
           />
+          {fieldErrors.addressDetails && (
+            <p className="text-red-500 text-[10px] font-bold mt-2 ml-2 animate-in fade-in">
+              ⚠️ {fieldErrors.addressDetails}
+            </p>
+          )}
         </div>
       </div>
 
