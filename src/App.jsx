@@ -3,9 +3,12 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AppProvider } from "./context/AppContext";
 import { CartProvider } from "./context/CartContext";
 import PageWrapper from "./components/PageWrapper";
+
+// Sahifalar
 import MenuPage from "./pages/MenuPage";
-import CheckoutPage from "./pages/CheckoutPage"; // 'CheckOutPage' emas, 'CheckoutPage'ligini tekshiring
-import AdminPage from "./pages/AdminPage"; // <--- SHU QATORGA DIQQAT QILING!
+import CartPage from "./pages/CartPage"; // SAVAT SAHIFASI QO'SHILDI ✅
+import CheckoutPage from "./pages/CheckoutPage";
+import AdminPage from "./pages/AdminPage";
 
 const App = () => {
   return (
@@ -18,6 +21,15 @@ const App = () => {
               element={
                 <PageWrapper>
                   <MenuPage />
+                </PageWrapper>
+              }
+            />
+            {/* SAVAT YO'NALISHI QO'SHILDI ✅ */}
+            <Route
+              path="/cart"
+              element={
+                <PageWrapper>
+                  <CartPage />
                 </PageWrapper>
               }
             />
