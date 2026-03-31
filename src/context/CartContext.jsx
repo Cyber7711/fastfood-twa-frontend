@@ -6,13 +6,13 @@ import React, {
   useMemo,
 } from "react";
 import { useTelegram } from "../hooks/useTelegram";
-
+import { useNavigate } from "react-router-dom";
 // Context yaratish
 export const CartContext = createContext();
 
 export const CartProvider = ({ children }) => {
   const { showMainButton, hideMainButton, tg } = useTelegram();
-
+  const navigate = useNavigate();
   // 1. LOCALSTORAGE BILAN STATE YARATISH
   // Foydalanuvchi sahifani yangilasa ham savat saqlanib qoladi
   const [cartItems, setCartItems] = useState(() => {
@@ -99,25 +99,22 @@ export const CartProvider = ({ children }) => {
       window.location.hash === "#/" ||
       window.location.pathname === "";
 
-    // Telegram button bosilganda ishlaydigan funksiya
+    // MANA SHU YER O'ZGARDI ✅
     const handleCheckout = () => {
-      window.location.href = "/checkout";
+      navigate("/cart"); // Silliq o'tish (Sahifa yangilanmaydi!)
     };
 
     if (totalQuantity > 0 && isMenuPage) {
-      // tugmaga pulni chiroyli qilib chiqaramiz (masalan: 35 000 so'm)
       const formattedPrice = totalPrice.toLocaleString("uz-UZ");
-
       showMainButton(`Savatga o'tish • ${formattedPrice} so'm`, handleCheckout);
     } else {
       hideMainButton();
     }
 
-    // Cleanup: Eski event listener'larni tozalab tashlash (Memory leak ni oldini oladi)
     return () => {
       tg.MainButton.offClick(handleCheckout);
     };
-  }, [totalQuantity, totalPrice, showMainButton, hideMainButton, tg]);
+  }, [totalQuantity, totalPrice, showMainButton, hideMainButton, tg, navigate]);
 
   // Context qiymatlarini keshlaymiz
   const contextValue = useMemo(

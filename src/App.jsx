@@ -4,17 +4,17 @@ import { AppProvider } from "./context/AppContext";
 import { CartProvider } from "./context/CartContext";
 import PageWrapper from "./components/PageWrapper";
 
-// Sahifalar
 import MenuPage from "./pages/MenuPage";
-import CartPage from "./pages/CartPage"; // SAVAT SAHIFASI QO'SHILDI ✅
+import CartPage from "./pages/CartPage";
 import CheckoutPage from "./pages/CheckoutPage";
 import AdminPage from "./pages/AdminPage";
 
 const App = () => {
   return (
-    <AppProvider>
-      <CartProvider>
-        <BrowserRouter>
+    // DIQQAT: BrowserRouter hamma narsani o'rab turishi kerak!
+    <BrowserRouter>
+      <AppProvider>
+        <CartProvider>
           <Routes>
             <Route
               path="/"
@@ -24,7 +24,6 @@ const App = () => {
                 </PageWrapper>
               }
             />
-            {/* SAVAT YO'NALISHI QO'SHILDI ✅ */}
             <Route
               path="/cart"
               element={
@@ -50,9 +49,9 @@ const App = () => {
               }
             />
           </Routes>
-        </BrowserRouter>
-      </CartProvider>
-    </AppProvider>
+        </CartProvider>
+      </AppProvider>
+    </BrowserRouter>
   );
 };
 
