@@ -11,6 +11,23 @@ import { CartContext } from "../context/CartContext";
 import { useTelegram } from "../hooks/useTelegram";
 import apiClient from "../services/api";
 
+// Toshkent tumanlari ro'yxati (Kelajakda API dan ham olish mumkin)
+const TASHKENT_DISTRICTS = [
+  "Bektemir",
+  "Chilonzor",
+  "Mirobod",
+  "Mirzo Ulug'bek",
+  "Olmazor",
+  "Sergeli",
+  "Shayxontohur",
+  "Uchtepa",
+  "Yakkasaroy",
+  "Yashnobod",
+  "Yunusobod",
+  "Zangiota", // Ba'zan Toshkent shahriga xizmat ko'rsatadi
+  "Yangihayot",
+];
+
 const CheckoutPage = () => {
   const navigate = useNavigate();
   const { tenantId, user } = useContext(AppContext);
@@ -24,34 +41,37 @@ const CheckoutPage = () => {
 
   const { tg, showMainButton, hideMainButton } = useTelegram();
 
+  // Form state'ni tuman va aniq manzilga ajratdik
   const [formData, setFormData] = useState({
     customerName: user?.first_name || "",
     customerPhone: "",
-    deliveryAddress: "",
+    district: "", // Tuman uchun yangi maydon
+    addressDetails: "", // Ko'cha, uy, mo'ljal
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // 1. TWA QOPQONINI Aylanib o'tish uchun REF ishlatamiz
+  // TWA qopqonini aylanib o'tish
   const formDataRef = useRef(formData);
   useEffect(() => {
     formDataRef.current = formData;
   }, [formData]);
 
-  // Input o'zgarishi
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  // 2. Buyurtma yuborish (Endi formData'ga qaram emas!)
   const submitOrder = useCallback(async () => {
-    const currentData = formDataRef.current; // Har doim eng oxirgi yozilgan ma'lumotni oladi
+    const currentData = formDataRef.current;
 
-    if (!currentData.customerPhone || !currentData.deliveryAddress) {
-      tg.showAlert(
-        "Iltimos, telefon raqam va yetkazib berish manzilini to'ldiring!",
-      );
+    // Validatsiyani kuchaytiramiz
+    if (
+      !currentData.customerPhone ||
+      !currentData.district ||
+      !currentData.addressDetails
+    ) {
+      tg.showAlert("Iltimos, telefon raqam va manzilni to'liq kiriting!");
       return;
     }
 
@@ -59,6 +79,9 @@ const CheckoutPage = () => {
     tg.MainButton.showProgress();
 
     try {
+      // Manzilni backend uchun chiroyli qilib birlashtiramiz
+      const fullAddress = `${currentData.district} tumani, ${currentData.addressDetails.trim()}`;
+
       const orderPayload = {
         tenantId,
         telegramId: user?.id || 123456789,
@@ -68,11 +91,11 @@ const CheckoutPage = () => {
           productId: item._id,
           name: item.name,
           quantity: item.quantity,
-          price: Number(item.price), // Xavfsizlik uchun Number
+          price: Number(item.price),
         })),
         totalPrice: Number(totalPrice),
         deliveryType: "DELIVERY",
-        deliveryAddress: { text: currentData.deliveryAddress.trim() },
+        deliveryAddress: { text: fullAddress }, // Birlashtirilgan manzil ketadi
         paymentMethod: "CASH",
       };
 
@@ -84,7 +107,7 @@ const CheckoutPage = () => {
           (buttonPressed) => {
             if (buttonPressed) {
               clearCart();
-              tg.close(); // Mini App'ni yopish
+              tg.close();
             }
           },
         );
@@ -96,9 +119,8 @@ const CheckoutPage = () => {
       setIsSubmitting(false);
       tg.MainButton.hideProgress();
     }
-  }, [cartItems, tenantId, user, totalPrice, tg, clearCart]); // formData yo'q
+  }, [cartItems, tenantId, user, totalPrice, tg, clearCart]);
 
-  // 3. Telegram tugmasini faqat 1 marta ulash
   useEffect(() => {
     if (!cartItems || cartItems.length === 0) {
       navigate("/");
@@ -127,10 +149,10 @@ const CheckoutPage = () => {
   return (
     <div className="min-h-screen bg-gray-50 pb-28 px-4 pt-4">
       <button
-        onClick={() => navigate("/")}
+        onClick={() => navigate("/cart")}
         className="flex items-center gap-2 text-orange-500 font-bold text-sm mb-6 active:scale-95 transition-transform uppercase tracking-widest"
       >
-        ← Menyuga qaytish
+        ← Savatga qaytish
       </button>
 
       <h1 className="text-2xl font-black text-gray-900 mb-6 tracking-tight">
@@ -184,22 +206,63 @@ const CheckoutPage = () => {
           />
         </div>
 
+        {/* Tuman tanlash (Kategoriya) */}
         <div>
           <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 ml-1">
-            Manzil <span className="text-orange-500">*</span>
+            Tumaningizni tanlang <span className="text-orange-500">*</span>
+          </label>
+          <div className="relative">
+            <select
+              name="district"
+              value={formData.district}
+              onChange={handleInputChange}
+              className="w-full px-4 py-4 bg-white border border-gray-100 rounded-2xl focus:outline-none focus:border-orange-500 font-bold text-gray-800 transition-colors shadow-sm appearance-none"
+            >
+              <option value="" disabled>
+                Toshkent shahri...
+              </option>
+              {TASHKENT_DISTRICTS.map((district) => (
+                <option key={district} value={district}>
+                  {district} tumani
+                </option>
+              ))}
+            </select>
+            {/* Custom yoycha (arrow) */}
+            <div className="absolute inset-y-0 right-4 flex items-center pointer-events-none">
+              <svg
+                className="w-5 h-5 text-gray-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                  d="M19 9l-7 7-7-7"
+                />
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        {/* Aniq manzil kiritish */}
+        <div>
+          <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 ml-1">
+            Aniq manzil <span className="text-orange-500">*</span>
           </label>
           <textarea
-            name="deliveryAddress"
-            placeholder="Ko'cha, uy raqami, mo'ljal..."
-            value={formData.deliveryAddress}
+            name="addressDetails"
+            placeholder="Ko'cha, uy raqami, qavat, mo'ljal..."
+            value={formData.addressDetails}
             onChange={handleInputChange}
-            rows={3}
-            className="w-full px-4 py-4 bg-white border border-gray-100 rounded-2xl focus:outline-none focus:border-orange-500 font-bold text-gray-800 transition-colors shadow-sm resize-none"
+            rows={2}
+            className="w-full px-4 py-4 bg-white border border-gray-100 rounded-2xl focus:outline-none focus:border-orange-500 font-bold text-gray-800 transition-colors shadow-sm resize-none placeholder:font-medium placeholder:text-gray-400"
           />
         </div>
       </div>
 
-      <p className="text-center text-gray-400 font-medium text-xs mt-8">
+      <p className="text-center text-gray-400 font-medium text-xs mt-8 mb-4">
         To'lov yetkazib berish paytida naqd pul orqali amalga oshiriladi
       </p>
     </div>
