@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useContext, useCallback } from "react";
+import React, {
+  useState,
+  useEffect,
+  useContext,
+  useCallback,
+  useRef,
+} from "react";
 import { useNavigate } from "react-router-dom";
 import { AppContext } from "../context/AppContext";
 import { CartContext } from "../context/CartContext";
@@ -26,15 +32,23 @@ const CheckoutPage = () => {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // 1. TWA QOPQONINI Aylanib o'tish uchun REF ishlatamiz
+  const formDataRef = useRef(formData);
+  useEffect(() => {
+    formDataRef.current = formData;
+  }, [formData]);
+
   // Input o'zgarishi
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  // Buyurtma yuborish
+  // 2. Buyurtma yuborish (Endi formData'ga qaram emas!)
   const submitOrder = useCallback(async () => {
-    if (!formData.customerPhone || !formData.deliveryAddress) {
+    const currentData = formDataRef.current; // Har doim eng oxirgi yozilgan ma'lumotni oladi
+
+    if (!currentData.customerPhone || !currentData.deliveryAddress) {
       tg.showAlert(
         "Iltimos, telefon raqam va yetkazib berish manzilini to'ldiring!",
       );
@@ -48,28 +62,30 @@ const CheckoutPage = () => {
       const orderPayload = {
         tenantId,
         telegramId: user?.id || 123456789,
-        customerName: formData.customerName.trim(),
-        customerPhone: formData.customerPhone.trim(),
+        customerName: currentData.customerName.trim(),
+        customerPhone: currentData.customerPhone.trim(),
         items: cartItems.map((item) => ({
           productId: item._id,
           name: item.name,
           quantity: item.quantity,
-          price: item.price,
+          price: Number(item.price), // Xavfsizlik uchun Number
         })),
-        totalPrice,
+        totalPrice: Number(totalPrice),
         deliveryType: "DELIVERY",
-        deliveryAddress: { text: formData.deliveryAddress.trim() },
+        deliveryAddress: { text: currentData.deliveryAddress.trim() },
         paymentMethod: "CASH",
       };
 
       const response = await apiClient.post("/orders", orderPayload);
 
-      if (response.success) {
+      if (response.success || response.order) {
         tg.showConfirm(
           "✅ Buyurtmangiz muvaffaqiyatli qabul qilindi!\nSavat tozalanmoqda...",
-          () => {
-            clearCart();
-            tg.close();
+          (buttonPressed) => {
+            if (buttonPressed) {
+              clearCart();
+              tg.close(); // Mini App'ni yopish
+            }
           },
         );
       }
@@ -80,26 +96,24 @@ const CheckoutPage = () => {
       setIsSubmitting(false);
       tg.MainButton.hideProgress();
     }
-  }, [formData, cartItems, tenantId, user, totalPrice, tg, clearCart]);
+  }, [cartItems, tenantId, user, totalPrice, tg, clearCart]); // formData yo'q
 
-  // Telegram tugmasi va redirect
+  // 3. Telegram tugmasini faqat 1 marta ulash
   useEffect(() => {
     if (!cartItems || cartItems.length === 0) {
-      const timer = setTimeout(() => navigate("/"), 800);
-      return () => clearTimeout(timer);
+      navigate("/");
+      return;
     }
 
-    showMainButton(
-      `TASDIQLASH — ${totalPrice.toLocaleString("ru-RU")} so'm`,
-      submitOrder,
-    );
+    const priceText = totalPrice.toLocaleString("uz-UZ");
+    showMainButton(`TASDIQLASH — ${priceText} so'm`, submitOrder);
 
     return () => {
       tg.MainButton.offClick(submitOrder);
       hideMainButton();
     };
   }, [
-    cartItems,
+    cartItems.length,
     totalPrice,
     submitOrder,
     navigate,
@@ -108,42 +122,42 @@ const CheckoutPage = () => {
     tg,
   ]);
 
-  // Agar savat bo'sh bo'lsa hech narsa ko'rsatmaymiz
-  if (!cartItems || cartItems.length === 0) {
-    return null;
-  }
+  if (!cartItems || cartItems.length === 0) return null;
 
   return (
     <div className="min-h-screen bg-gray-50 pb-28 px-4 pt-4">
       <button
         onClick={() => navigate("/")}
-        className="flex items-center gap-2 text-orange-500 font-semibold text-lg mb-6 hover:text-orange-600 transition-colors"
+        className="flex items-center gap-2 text-orange-500 font-bold text-sm mb-6 active:scale-95 transition-transform uppercase tracking-widest"
       >
         ← Menyuga qaytish
       </button>
 
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">
+      <h1 className="text-2xl font-black text-gray-900 mb-6 tracking-tight">
         Buyurtmani tasdiqlash
       </h1>
 
-      {/* Buyurtma haqida qisqa ma'lumot */}
-      <div className="bg-white rounded-2xl p-5 shadow-sm mb-6">
-        <div className="flex justify-between py-3 border-b border-gray-100">
-          <span className="text-gray-600">Jami mahsulotlar</span>
-          <span className="font-semibold">{totalQuantity} ta</span>
+      <div className="bg-white rounded-3xl p-5 shadow-sm border border-gray-100 mb-6">
+        <div className="flex justify-between py-3 border-b border-gray-50">
+          <span className="text-gray-500 font-medium text-sm">
+            Jami mahsulotlar
+          </span>
+          <span className="font-bold text-gray-800">{totalQuantity} ta</span>
         </div>
-        <div className="flex justify-between py-3">
-          <span className="text-gray-600">Umumiy summa</span>
-          <span className="font-bold text-2xl text-orange-500">
-            {totalPrice.toLocaleString("ru-RU")} so'm
+        <div className="flex justify-between py-3 items-end">
+          <span className="text-gray-500 font-medium text-sm">
+            Umumiy summa
+          </span>
+          <span className="font-black text-2xl text-orange-500">
+            {totalPrice.toLocaleString("uz-UZ")}{" "}
+            <span className="text-sm">so'm</span>
           </span>
         </div>
       </div>
 
-      {/* Form */}
-      <div className="space-y-6">
+      <div className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 ml-1">
             Ismingiz
           </label>
           <input
@@ -152,13 +166,13 @@ const CheckoutPage = () => {
             placeholder="Ismingizni kiriting"
             value={formData.customerName}
             onChange={handleInputChange}
-            className="w-full px-4 py-3.5 bg-white border border-gray-200 rounded-2xl focus:outline-none focus:border-orange-400"
+            className="w-full px-4 py-4 bg-white border border-gray-100 rounded-2xl focus:outline-none focus:border-orange-500 font-bold text-gray-800 transition-colors shadow-sm"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Telefon raqamingiz <span className="text-red-500">*</span>
+          <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 ml-1">
+            Telefon raqam <span className="text-orange-500">*</span>
           </label>
           <input
             type="tel"
@@ -166,13 +180,13 @@ const CheckoutPage = () => {
             placeholder="+998 90 123 45 67"
             value={formData.customerPhone}
             onChange={handleInputChange}
-            className="w-full px-4 py-3.5 bg-white border border-gray-200 rounded-2xl focus:outline-none focus:border-orange-400"
+            className="w-full px-4 py-4 bg-white border border-gray-100 rounded-2xl focus:outline-none focus:border-orange-500 font-bold text-gray-800 transition-colors shadow-sm"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Yetkazib berish manzili <span className="text-red-500">*</span>
+          <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 ml-1">
+            Manzil <span className="text-orange-500">*</span>
           </label>
           <textarea
             name="deliveryAddress"
@@ -180,12 +194,12 @@ const CheckoutPage = () => {
             value={formData.deliveryAddress}
             onChange={handleInputChange}
             rows={3}
-            className="w-full px-4 py-3.5 bg-white border border-gray-200 rounded-2xl focus:outline-none focus:border-orange-400 resize-none"
+            className="w-full px-4 py-4 bg-white border border-gray-100 rounded-2xl focus:outline-none focus:border-orange-500 font-bold text-gray-800 transition-colors shadow-sm resize-none"
           />
         </div>
       </div>
 
-      <p className="text-center text-gray-500 text-sm mt-10">
+      <p className="text-center text-gray-400 font-medium text-xs mt-8">
         To'lov yetkazib berish paytida naqd pul orqali amalga oshiriladi
       </p>
     </div>
