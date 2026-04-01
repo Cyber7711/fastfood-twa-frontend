@@ -7,14 +7,14 @@ import React, {
 } from "react";
 import { useTelegram } from "../hooks/useTelegram";
 import { useNavigate } from "react-router-dom";
-// Context yaratish
+
 export const CartContext = createContext();
 
 export const CartProvider = ({ children }) => {
   const { showMainButton, hideMainButton, tg } = useTelegram();
   const navigate = useNavigate();
+
   // 1. LOCALSTORAGE BILAN STATE YARATISH
-  // Foydalanuvchi sahifani yangilasa ham savat saqlanib qoladi
   const [cartItems, setCartItems] = useState(() => {
     try {
       const savedCart = localStorage.getItem("fastfood_cart");
@@ -30,40 +30,79 @@ export const CartProvider = ({ children }) => {
     localStorage.setItem("fastfood_cart", JSON.stringify(cartItems));
   }, [cartItems]);
 
-  // Savatga qo'shish
+  // 🔥 YORDAMCHI FUNKSIYA: Bitta mahsulot uchun noyob ID yaratish (Modifikatorlarni hisobga olib)
+  const generateCartItemId = (product) => {
+    // Agar qo'shimchalar bo'lmasa, shunchaki mahsulot ID si qolaveradi
+    if (!product.selectedModifiers || product.selectedModifiers.length === 0) {
+      return product._id;
+    }
+    // Agar qo'shimchalar bo'lsa, ularning nomini ID ga qoshib yozamiz: "12345-pishloq-ketchup"
+    const modString = product.selectedModifiers
+      .map((m) => m.name.replace(/\s+/g, ""))
+      .sort()
+      .join("-");
+    return `${product._id}-${modString}`;
+  };
+
+  // 3. SAVATGA QO'SHISH (Mukammallashtirilgan)
   const addToCart = useCallback((product) => {
     setCartItems((prevItems) => {
-      const existingItem = prevItems.find((item) => item._id === product._id);
+      // 1. Shu kiritilayotgan kombinatsiya uchun ID yaratamiz yoki kelganini ishlatamiz
+      const cartItemId = product.cartItemId || generateCartItemId(product);
+
+      const existingItem = prevItems.find(
+        (item) => item.cartItemId === cartItemId,
+      );
 
       if (existingItem) {
+        // Agar huddi shunday qo'shimchali burger oldin qo'shilgan bo'lsa, sonini oshiramiz
         return prevItems.map((item) =>
-          item._id === product._id
+          item.cartItemId === cartItemId
             ? { ...item, quantity: item.quantity + 1 }
             : item,
         );
       }
 
-      // DIQQAT: API dan kelgan ma'lumotni Number() ga o'tkazib himoyalaymiz
+      // 2. Modifikatorlar narxini ham hisoblab bitta "Yakuniy dona narx" ni chiqaramiz
+      const basePrice = Number(product.price) || 0;
+      const modsPrice =
+        product.selectedModifiers?.reduce(
+          (sum, mod) => sum + (Number(mod.price) || 0),
+          0,
+        ) || 0;
+      const finalUnitPrice = basePrice + modsPrice;
+
+      // 3. Yangi mahsulot sifatida qo'shamiz
       return [
         ...prevItems,
-        { ...product, price: Number(product.price), quantity: 1 },
+        {
+          ...product,
+          cartItemId, // 🔥 Endi bizning yangi takrorlanmas kalitimiz shu!
+          unitPrice: finalUnitPrice, // Asosiy narx + qo'shimchalar narxi
+          quantity: 1,
+        },
       ];
     });
   }, []);
 
-  // Savatdan olib tashlash / kamaytirish
-  const removeFromCart = useCallback((productId) => {
+  // 4. SAVATDAN OLIB TASHLASH / KAMAYTIRISH
+  const removeFromCart = useCallback((cartItemIdToRemove) => {
+    // DIQQAT: Endi productId emas, balki cartItemId ni kutamiz
     setCartItems((prevItems) => {
-      const existingItem = prevItems.find((item) => item._id === productId);
+      const existingItem = prevItems.find(
+        (item) => item.cartItemId === cartItemIdToRemove,
+      );
 
       if (!existingItem) return prevItems;
 
       if (existingItem.quantity === 1) {
-        return prevItems.filter((item) => item._id !== productId);
+        return prevItems.filter(
+          (item) => item.cartItemId !== cartItemIdToRemove,
+        );
       }
 
       return prevItems.map((item) =>
-        item._id === productId
+        item.cartItemId === cartItemIdToRemove
           ? { ...item, quantity: item.quantity - 1 }
           : item,
       );
@@ -72,15 +111,15 @@ export const CartProvider = ({ children }) => {
 
   // Butun savatni tozalash
   const clearCart = useCallback(() => {
-    console.log("[CART CONTEXT] 🧹 Savat tozalandi.");
     setCartItems([]);
-    localStorage.removeItem("fastfood_cart"); // Xotiradan ham tozalaymiz
+    localStorage.removeItem("fastfood_cart");
   }, []);
 
-  // 3. HISOB-KITOBLAR (Xatosiz va aniq)
+  // 5. HISOB-KITOBLAR (Xatosiz va aniq)
   const totalPrice = useMemo(() => {
     return cartItems.reduce((acc, item) => {
-      const price = Number(item.price) || 0;
+      // Endi oddiy price emas, balki qo'shimchalar bilan qo'shilgan unitPrice ni ko'paytiramiz
+      const price = Number(item.unitPrice) || Number(item.price) || 0;
       const qty = Number(item.quantity) || 0;
       return acc + price * qty;
     }, 0);
@@ -92,16 +131,15 @@ export const CartProvider = ({ children }) => {
     }, 0);
   }, [cartItems]);
 
-  // 4. TELEGRAM MAIN BUTTON BOSHQARUVI
+  // 6. TELEGRAM MAIN BUTTON BOSHQARUVI
   useEffect(() => {
     const isMenuPage =
       window.location.pathname === "/" ||
       window.location.hash === "#/" ||
       window.location.pathname === "";
 
-    // MANA SHU YER O'ZGARDI ✅
     const handleCheckout = () => {
-      navigate("/cart"); // Silliq o'tish (Sahifa yangilanmaydi!)
+      navigate("/cart");
     };
 
     if (totalQuantity > 0 && isMenuPage) {
@@ -116,7 +154,6 @@ export const CartProvider = ({ children }) => {
     };
   }, [totalQuantity, totalPrice, showMainButton, hideMainButton, tg, navigate]);
 
-  // Context qiymatlarini keshlaymiz
   const contextValue = useMemo(
     () => ({
       cartItems,
