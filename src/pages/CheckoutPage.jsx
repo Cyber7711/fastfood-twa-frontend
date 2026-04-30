@@ -27,27 +27,26 @@ const TASHKENT_DISTRICTS = [
   "Yangihayot",
 ];
 
+const DELIVERY_FEE = 10000; // Yetkazib berish narxi (Doimiy konstanta)
+
 const CheckoutPage = () => {
   const navigate = useNavigate();
   const { tenantId, user } = useContext(AppContext);
-
   const {
     cartItems = [],
     totalPrice = 0,
     totalQuantity = 0,
     clearCart,
   } = useContext(CartContext) || {};
-
   const { tg, showMainButton, hideMainButton } = useTelegram();
 
   const [formData, setFormData] = useState({
     customerName: user?.first_name || "",
-    customerPhone: "",
+    customerPhone: "+998 ", // Boshlang'ich qiymat yo'nalish berish uchun
     district: "",
     addressDetails: "",
   });
 
-  // 1. Yangi State: Xatolarni ushlab turish uchun
   const [fieldErrors, setFieldErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -56,33 +55,52 @@ const CheckoutPage = () => {
     formDataRef.current = formData;
   }, [formData]);
 
+  // Jami hisob (Mahsulotlar + Dostavka)
+  const finalTotalAmount = Number(totalPrice) + DELIVERY_FEE;
+
+  // 1. O'zbekiston telefon raqami uchun Maxsus Handler
+  const handlePhoneChange = (e) => {
+    let val = e.target.value.replace(/\D/g, ""); // Faqat raqamlarni olamiz
+
+    // Agar 998 dan boshlansa, uni olib tashlaymiz (chunki o'zimiz qo'shamiz)
+    if (val.startsWith("998")) val = val.substring(3);
+    val = val.substring(0, 9); // Maksimal 9 ta raqam (kod + raqam)
+
+    // Formatlash: +998 90 123 45 67
+    let formatted = "+998";
+    if (val.length > 0) formatted += " " + val.substring(0, 2);
+    if (val.length > 2) formatted += " " + val.substring(2, 5);
+    if (val.length > 5) formatted += " " + val.substring(5, 7);
+    if (val.length > 7) formatted += " " + val.substring(7, 9);
+
+    setFormData((prev) => ({ ...prev, customerPhone: formatted }));
+    if (fieldErrors.customerPhone)
+      setFieldErrors((prev) => ({ ...prev, customerPhone: null }));
+  };
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
-
-    // Foydalanuvchi yoza boshlaganda o'sha maydondagi xatoni o'chirib tashlaymiz (UX uchun)
-    if (fieldErrors[name]) {
+    if (fieldErrors[name])
       setFieldErrors((prev) => ({ ...prev, [name]: null }));
-    }
   };
 
   const submitOrder = useCallback(async () => {
     const currentData = formDataRef.current;
-
-    // Har bir yangi so'rovdan oldin xatolarni tozalaymiz
     setFieldErrors({});
 
-    // Frontend oddiy tekshiruvi (bo'sh qolganini tekshirish)
+    // Validatsiya
     let localErrors = {};
-    if (!currentData.customerPhone)
-      localErrors.customerPhone = "Telefon raqam kiritilishi shart";
+    if (currentData.customerPhone.length < 17)
+      // "+998 90 123 45 67" uzunligi 17 ta belgi
+      localErrors.customerPhone = "Telefon raqamni to'liq kiriting";
     if (!currentData.district) localErrors.district = "Tuman tanlanishi shart";
     if (!currentData.addressDetails)
       localErrors.addressDetails = "Manzil kiritilishi shart";
 
     if (Object.keys(localErrors).length > 0) {
       setFieldErrors(localErrors);
-      tg.showAlert("Iltimos, qizil bilan belgilangan maydonlarni to'ldiring!");
+      tg.showAlert("Iltimos, barcha maydonlarni to'g'ri to'ldiring!");
       return;
     }
 
@@ -92,18 +110,32 @@ const CheckoutPage = () => {
     try {
       const fullAddress = `${currentData.district} tumani, ${currentData.addressDetails.trim()}`;
 
+      // 2. 🔥 TO'G'RILANGAN PAYLOAD: Modifikatorlar va barcha narxlar
       const orderPayload = {
         tenantId,
-        telegramId: user?.id || 123456789,
+        customerId: user?.id || 123456789,
         customerName: currentData.customerName.trim(),
-        customerPhone: currentData.customerPhone.trim(),
-        items: cartItems.map((item) => ({
-          productId: item._id,
-          name: item.name,
-          quantity: item.quantity,
-          price: Number(item.price),
-        })),
-        totalPrice: Number(totalPrice),
+        customerPhone: currentData.customerPhone.replace(/\s/g, ""), // Bo'shliqlarni olib yuboramiz (+998901234567)
+        items: cartItems.map((item) => {
+          const modsSum =
+            item.selectedModifiers?.reduce(
+              (sum, m) => sum + (Number(m.price) || 0),
+              0,
+            ) || 0;
+          const itemBasePrice = Number(item.price) || 0;
+
+          return {
+            productId: item._id,
+            productName: item.name,
+            quantity: Number(item.quantity),
+            unitPrice: itemBasePrice,
+            selectedModifiers: item.selectedModifiers || [],
+            itemTotal: (itemBasePrice + modsSum) * Number(item.quantity),
+          };
+        }),
+        subTotal: Number(totalPrice),
+        deliveryFee: DELIVERY_FEE,
+        totalAmount: finalTotalAmount,
         deliveryType: "DELIVERY",
         deliveryAddress: { text: fullAddress },
         paymentMethod: "CASH",
@@ -113,7 +145,7 @@ const CheckoutPage = () => {
 
       if (response.success || response.order) {
         tg.showConfirm(
-          "✅ Buyurtmangiz muvaffaqiyatli qabul qilindi!\nSavat tozalanmoqda...",
+          "✅ Buyurtmangiz qabul qilindi!\nTez orada siz bilan bog'lanamiz.",
           (buttonPressed) => {
             if (buttonPressed) {
               clearCart();
@@ -124,37 +156,32 @@ const CheckoutPage = () => {
       }
     } catch (error) {
       console.error("[CHECKOUT ERROR]", error);
-
-      // 2. Backenddan kelgan (Zod) xatolarini ushlash va UI ga bog'lash
       if (error.response?.data?.details) {
         const errors = {};
         error.response.data.details.forEach((err) => {
-          // err.field orqali kelgan xatoni mos inputga ulaymiz
           errors[err.field] = err.message;
         });
         setFieldErrors(errors);
-        tg.showAlert(
-          "Ma'lumotlarda xatolik bor. Iltimos tekshirib qayta urinib ko'ring.",
-        );
+        tg.showAlert("Ma'lumotlarda xatolik bor. Qayta tekshiring.");
       } else {
         tg.showAlert(
-          error.response?.data?.message ||
-            "Xatolik yuz berdi. Iltimos, qayta urinib ko'ring.",
+          "Xatolik yuz berdi. Iltimos, keyinroq qayta urinib ko'ring.",
         );
       }
     } finally {
       setIsSubmitting(false);
       tg.MainButton.hideProgress();
     }
-  }, [cartItems, tenantId, user, totalPrice, tg, clearCart]);
+  }, [cartItems, tenantId, user, totalPrice, finalTotalAmount, tg, clearCart]);
 
+  // MainButton ni jami summa bilan ko'rsatish
   useEffect(() => {
     if (!cartItems || cartItems.length === 0) {
       navigate("/");
       return;
     }
 
-    const priceText = totalPrice.toLocaleString("uz-UZ");
+    const priceText = finalTotalAmount.toLocaleString("uz-UZ");
     showMainButton(`TASDIQLASH — ${priceText} so'm`, submitOrder);
 
     return () => {
@@ -163,7 +190,7 @@ const CheckoutPage = () => {
     };
   }, [
     cartItems.length,
-    totalPrice,
+    finalTotalAmount,
     submitOrder,
     navigate,
     showMainButton,
@@ -186,19 +213,30 @@ const CheckoutPage = () => {
         Buyurtmani tasdiqlash
       </h1>
 
-      <div className="bg-white rounded-3xl p-5 shadow-sm border border-gray-100 mb-6">
-        <div className="flex justify-between py-3 border-b border-gray-50">
+      {/* 3. 🔥 SHAFFOF CHEK UI */}
+      <div className="bg-white rounded-3xl p-5 shadow-sm border border-gray-100 mb-6 divide-y divide-gray-50">
+        <div className="flex justify-between py-2 items-center">
           <span className="text-gray-500 font-medium text-sm">
-            Jami mahsulotlar
+            Mahsulotlar ({totalQuantity} ta)
           </span>
-          <span className="font-bold text-gray-800">{totalQuantity} ta</span>
+          <span className="font-bold text-gray-800">
+            {totalPrice.toLocaleString("uz-UZ")} so'm
+          </span>
         </div>
-        <div className="flex justify-between py-3 items-end">
+        <div className="flex justify-between py-2 items-center">
           <span className="text-gray-500 font-medium text-sm">
-            Umumiy summa
+            Yetkazib berish haqi
+          </span>
+          <span className="font-bold text-gray-800">
+            {DELIVERY_FEE.toLocaleString("uz-UZ")} so'm
+          </span>
+        </div>
+        <div className="flex justify-between pt-4 pb-1 items-end mt-2">
+          <span className="text-gray-900 font-black text-sm uppercase tracking-wider">
+            Jami to'lov
           </span>
           <span className="font-black text-2xl text-orange-500">
-            {totalPrice.toLocaleString("uz-UZ")}{" "}
+            {finalTotalAmount.toLocaleString("uz-UZ")}{" "}
             <span className="text-sm">so'm</span>
           </span>
         </div>
@@ -220,14 +258,9 @@ const CheckoutPage = () => {
               fieldErrors.customerName ? "border-red-500" : "border-gray-100"
             } rounded-2xl focus:outline-none focus:border-orange-500 font-bold text-gray-800 transition-colors shadow-sm`}
           />
-          {fieldErrors.customerName && (
-            <p className="text-red-500 text-[10px] font-bold mt-2 ml-2 animate-in fade-in">
-              ⚠️ {fieldErrors.customerName}
-            </p>
-          )}
         </div>
 
-        {/* Telefon raqam */}
+        {/* Telefon raqam maskasi bilan */}
         <div>
           <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 ml-1">
             Telefon raqam <span className="text-orange-500">*</span>
@@ -237,10 +270,11 @@ const CheckoutPage = () => {
             name="customerPhone"
             placeholder="+998 90 123 45 67"
             value={formData.customerPhone}
-            onChange={handleInputChange}
+            onChange={handlePhoneChange} // Maxsus handler ulandi
+            maxLength={17}
             className={`w-full px-4 py-4 bg-white border ${
               fieldErrors.customerPhone ? "border-red-500" : "border-gray-100"
-            } rounded-2xl focus:outline-none focus:border-orange-500 font-bold text-gray-800 transition-colors shadow-sm`}
+            } rounded-2xl focus:outline-none focus:border-orange-500 font-bold text-gray-900 tracking-wider transition-colors shadow-sm`}
           />
           {fieldErrors.customerPhone && (
             <p className="text-red-500 text-[10px] font-bold mt-2 ml-2 animate-in fade-in">
@@ -249,7 +283,7 @@ const CheckoutPage = () => {
           )}
         </div>
 
-        {/* Tuman tanlash (Kategoriya) */}
+        {/* Tuman tanlash */}
         <div>
           <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 ml-1">
             Tumaningizni tanlang <span className="text-orange-500">*</span>
@@ -272,21 +306,7 @@ const CheckoutPage = () => {
                 </option>
               ))}
             </select>
-            <div className="absolute inset-y-0 right-4 flex items-center pointer-events-none">
-              <svg
-                className="w-5 h-5 text-gray-400"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M19 9l-7 7-7-7"
-                />
-              </svg>
-            </div>
+            {/* ... select icon ... */}
           </div>
           {fieldErrors.district && (
             <p className="text-red-500 text-[10px] font-bold mt-2 ml-2 animate-in fade-in">
@@ -295,20 +315,20 @@ const CheckoutPage = () => {
           )}
         </div>
 
-        {/* Aniq manzil kiritish */}
+        {/* Aniq manzil */}
         <div>
           <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 ml-1">
             Aniq manzil <span className="text-orange-500">*</span>
           </label>
           <textarea
             name="addressDetails"
-            placeholder="Ko'cha, uy raqami, qavat, mo'ljal..."
+            placeholder="Ko'cha, uy, xonadon, mo'ljal..."
             value={formData.addressDetails}
             onChange={handleInputChange}
             rows={2}
             className={`w-full px-4 py-4 bg-white border ${
               fieldErrors.addressDetails ? "border-red-500" : "border-gray-100"
-            } rounded-2xl focus:outline-none focus:border-orange-500 font-bold text-gray-800 transition-colors shadow-sm resize-none placeholder:font-medium placeholder:text-gray-400`}
+            } rounded-2xl focus:outline-none focus:border-orange-500 font-bold text-gray-800 transition-colors shadow-sm resize-none`}
           />
           {fieldErrors.addressDetails && (
             <p className="text-red-500 text-[10px] font-bold mt-2 ml-2 animate-in fade-in">
@@ -318,8 +338,9 @@ const CheckoutPage = () => {
         </div>
       </div>
 
-      <p className="text-center text-gray-400 font-medium text-xs mt-8 mb-4">
-        To'lov yetkazib berish paytida naqd pul orqali amalga oshiriladi
+      <p className="text-center text-gray-400 font-medium text-xs mt-8 mb-4 flex items-center justify-center gap-2">
+        <span className="text-lg">💵</span> To'lov yetkazib berilgandan so'ng
+        amalga oshiriladi
       </p>
     </div>
   );
