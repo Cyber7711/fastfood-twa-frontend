@@ -4,9 +4,17 @@ import React, {
   useContext,
   useCallback,
   useRef,
+  useMemo,
 } from "react";
 import { useNavigate } from "react-router-dom";
-import { User, Phone, MapPin, Navigation, ArrowLeft } from "lucide-react";
+import {
+  User,
+  Phone,
+  MapPin,
+  Navigation,
+  ArrowLeft,
+  CreditCard,
+} from "lucide-react";
 import { AppContext } from "../context/AppContext";
 import { CartContext } from "../context/CartContext";
 import { useTelegram } from "../hooks/useTelegram";
@@ -28,6 +36,7 @@ const TASHKENT_DISTRICTS = [
   "Yangihayot",
 ].sort();
 
+// SaaS tizimida buni backend'dan (tenant settings) olish ma'qul
 const DELIVERY_FEE = 10000;
 
 const CheckoutPage = () => {
@@ -51,55 +60,62 @@ const CheckoutPage = () => {
   const [fieldErrors, setFieldErrors] = useState({});
   const [loading, setLoading] = useState(false);
 
-  // Ref orqali callback ichida eng oxirgi loading holatini tekshiramiz
-  const loadingRef = useRef(loading);
-  useEffect(() => {
-    loadingRef.current = loading;
-  }, [loading]);
+  // Loading holatini saqlash (MainButton handler uchun)
+  const loadingRef = useRef(false);
 
-  const finalTotalAmount = Number(totalPrice) + DELIVERY_FEE;
+  const finalTotalAmount = useMemo(
+    () => Number(totalPrice) + DELIVERY_FEE,
+    [totalPrice],
+  );
 
   // 📞 Telefon raqam formati (+998 XX XXX XX XX)
-  const handlePhoneChange = (e) => {
-    let val = e.target.value.replace(/\D/g, "");
-    if (val.startsWith("998")) val = val.substring(3);
-    val = val.substring(0, 9);
+  const formatPhoneNumber = (val) => {
+    let digits = val.replace(/\D/g, "");
+    if (digits.startsWith("998")) digits = digits.substring(3);
+    digits = digits.substring(0, 9);
 
-    let formatted = "+998";
-    if (val.length > 0) formatted += " " + val.substring(0, 2);
-    if (val.length > 2) formatted += " " + val.substring(2, 5);
-    if (val.length > 5) formatted += " " + val.substring(5, 7);
-    if (val.length > 7) formatted += " " + val.substring(7, 9);
-
-    setFormData((prev) => ({ ...prev, customerPhone: formatted }));
-    setFieldErrors((prev) => ({ ...prev, customerPhone: null }));
+    let res = "+998";
+    if (digits.length > 0) res += " " + digits.substring(0, 2);
+    if (digits.length > 2) res += " " + digits.substring(2, 5);
+    if (digits.length > 5) res += " " + digits.substring(5, 7);
+    if (digits.length > 7) res += " " + digits.substring(7, 9);
+    return res;
   };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-    setFieldErrors((prev) => ({ ...prev, [name]: null }));
+    const formattedValue =
+      name === "customerPhone" ? formatPhoneNumber(value) : value;
+
+    setFormData((prev) => ({ ...prev, [name]: formattedValue }));
+    if (fieldErrors[name]) {
+      setFieldErrors((prev) => ({ ...prev, [name]: null }));
+    }
   };
 
-  const submitOrder = useCallback(async () => {
-    // Loading holatini ref orqali tekshirish (closure xatoligini oldini oladi)
-    if (loadingRef.current) return;
-
+  const validate = () => {
     let errors = {};
     if (formData.customerName.trim().length < 3)
       errors.customerName = "Ism juda qisqa";
     if (formData.customerPhone.length < 17)
-      errors.customerPhone = "Raqam to'liq emas";
+      errors.customerPhone = "Raqam noto'g'ri";
     if (!formData.district) errors.district = "Tumanni tanlang";
     if (formData.addressDetails.trim().length < 5)
-      errors.addressDetails = "Manzilni to'liqroq yozing";
+      errors.addressDetails = "Manzilni to'liq yozing";
 
-    if (Object.keys(errors).length > 0) {
-      setFieldErrors(errors);
+    setFieldErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
+  const submitOrder = useCallback(async () => {
+    if (loadingRef.current) return;
+
+    if (!validate()) {
       tg.HapticFeedback.notificationOccurred("error");
       return;
     }
 
+    loadingRef.current = true;
     setLoading(true);
     tg.MainButton.showProgress();
     tg.MainButton.disable();
@@ -107,79 +123,52 @@ const CheckoutPage = () => {
     try {
       const orderPayload = {
         tenantId,
-        customerId: user?.id || 0,
+        telegramId: user?.id,
         customerName: formData.customerName.trim(),
         customerPhone: formData.customerPhone.replace(/\s/g, ""),
         items: cartItems.map((item) => ({
           productId: item._id,
-          productName: item.name,
-          quantity: Number(item.quantity),
-          unitPrice: Number(item.price),
+          quantity: item.quantity,
           selectedModifiers: item.selectedModifiers || [],
-          itemTotal:
-            (Number(item.price) +
-              (item.selectedModifiers?.reduce(
-                (s, m) => s + Number(m.price),
-                0,
-              ) || 0)) *
-            item.quantity,
         })),
-        subTotal: totalPrice,
         deliveryFee: DELIVERY_FEE,
-        totalAmount: finalTotalAmount,
-        deliveryType: "DELIVERY",
         deliveryAddress: {
-          text: `${formData.district} tumani, ${formData.addressDetails}`,
+          district: formData.district,
+          text: formData.addressDetails,
         },
         paymentMethod: "CASH",
       };
 
-      const res = await apiClient.post("/orders", orderPayload);
+      await apiClient.post("/orders", orderPayload);
 
-      if (res.data) {
-        tg.HapticFeedback.notificationOccurred("success");
-        clearCart();
-        tg.showConfirm(
-          "✅ Buyurtmangiz qabul qilindi! Botga qaytasizmi?",
-          (confirm) => {
-            if (confirm) tg.close();
-            else navigate("/");
-          },
-        );
-      }
+      tg.HapticFeedback.notificationOccurred("success");
+      clearCart();
+
+      tg.showConfirm(
+        "✅ Buyurtma qabul qilindi! Botga qaytasizmi?",
+        (confirm) => {
+          if (confirm) tg.close();
+          else navigate("/");
+        },
+      );
     } catch (err) {
       console.error("Order Error:", err);
-      tg.showAlert(
-        "⚠️ Server bilan bog'lanishda xato. Iltimos qayta urinib ko'ring.",
-      );
+      tg.HapticFeedback.notificationOccurred("error");
+      tg.showAlert("⚠️ Xatolik yuz berdi. Iltimos, qayta urinib ko'ring.");
     } finally {
+      loadingRef.current = false;
       setLoading(false);
       tg.MainButton.hideProgress();
       tg.MainButton.enable();
     }
-  }, [
-    formData,
-    cartItems,
-    tenantId,
-    user,
-    totalPrice,
-    finalTotalAmount,
-    tg,
-    clearCart,
-    navigate,
-  ]);
+  }, [formData, cartItems, tenantId, user, tg, clearCart, navigate]);
 
   // 🔘 Telegram MainButton Boshqaruvi
   useEffect(() => {
-    if (!cartItems.length) {
-      navigate("/");
-      return;
-    }
-
-    const priceText = finalTotalAmount.toLocaleString("uz-UZ") + " so'm";
+    if (!cartItems.length) return;
 
     tg.MainButton.setParams({
-      text: `TASDIQLASH (${priceText})`,
+      text: `TASDIQLASH (${finalTotalAmount.toLocaleString()} so'm)`,
       color: "#31b545",
       text_color: "#ffffff",
       is_active: true,
@@ -192,79 +181,81 @@ const CheckoutPage = () => {
       tg.MainButton.offClick(submitOrder);
       tg.MainButton.hide();
     };
-  }, [finalTotalAmount, cartItems.length, submitOrder, tg, navigate]);
+  }, [finalTotalAmount, cartItems.length, submitOrder, tg]);
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-32 animate-in fade-in duration-500">
-      <div className="p-4">
-        {/* Back Button */}
+    <div className="min-h-screen bg-[#F8F9FB] pb-36 animate-in fade-in duration-500">
+      {/* Header */}
+      <div className="sticky top-0 bg-white/80 backdrop-blur-md z-10 px-4 py-3 border-b border-gray-100 flex items-center gap-4">
         <button
           onClick={() => navigate("/cart")}
-          className="flex items-center gap-2 text-gray-500 font-bold text-sm mb-6 active:scale-95 transition-transform"
+          className="p-2 -ml-2 active:scale-90 transition-transform"
         >
-          <ArrowLeft size={16} /> Savatga qaytish
+          <ArrowLeft size={20} className="text-gray-900" />
         </button>
-
-        <h1 className="text-2xl font-black text-gray-900 mb-6">
+        <h1 className="text-lg font-black text-gray-900 uppercase tracking-tight">
           Rasmiylashtirish
         </h1>
+      </div>
 
-        {/* CHEK */}
-        <div className="bg-white rounded-[28px] p-6 shadow-sm border border-gray-100 mb-8">
+      <div className="p-4 space-y-6">
+        {/* Buyurtma xulosasi */}
+        <section className="bg-white rounded-3xl p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-50">
+          <h2 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4">
+            Sizning buyurtmangiz
+          </h2>
           <div className="space-y-3">
-            <div className="flex justify-between text-gray-500 font-medium">
+            <div className="flex justify-between text-sm font-bold text-gray-600">
               <span>Mahsulotlar ({totalQuantity})</span>
               <span>{totalPrice.toLocaleString()} so'm</span>
             </div>
-            <div className="flex justify-between text-gray-500 font-medium">
+            <div className="flex justify-between text-sm font-bold text-gray-600">
               <span>Yetkazib berish</span>
               <span>{DELIVERY_FEE.toLocaleString()} so'm</span>
             </div>
-            <div className="h-[1px] bg-gray-100 my-2" />
-            <div className="flex justify-between items-end">
-              <span className="text-gray-900 font-bold">Jami:</span>
-              <span className="text-2xl font-black text-green-600">
-                {finalTotalAmount.toLocaleString()}{" "}
-                <small className="text-sm font-bold">so'm</small>
+            <div className="pt-3 border-t border-dashed border-gray-200 flex justify-between items-center">
+              <span className="text-gray-900 font-black">Jami:</span>
+              <span className="text-xl font-black text-green-600">
+                {finalTotalAmount.toLocaleString()} so'm
               </span>
             </div>
           </div>
-        </div>
+        </section>
 
-        {/* FORM SECTION */}
-        <div className="space-y-5">
+        {/* Ma'lumotlar formasi */}
+        <div className="space-y-4">
           <InputGroup
             label="Ismingiz"
-            icon={<User size={14} className="text-orange-500" />}
+            icon={<User size={16} />}
             name="customerName"
             value={formData.customerName}
             onChange={handleInputChange}
             error={fieldErrors.customerName}
-            placeholder="Ismingizni kiriting"
+            placeholder="Masalan: Sarvar"
           />
 
           <InputGroup
             label="Telefon raqam"
-            icon={<Phone size={14} className="text-orange-500" />}
+            icon={<Phone size={16} />}
             name="customerPhone"
             value={formData.customerPhone}
-            onChange={handlePhoneChange}
+            onChange={handleInputChange}
             error={fieldErrors.customerPhone}
             type="tel"
           />
 
           <div className="flex flex-col">
-            <label className="flex items-center gap-2 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2 ml-2">
-              <MapPin size={14} className="text-orange-500" /> Tuman
+            <label className="flex items-center gap-2 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2 ml-1">
+              <MapPin size={16} className="text-green-500" /> Tuman
             </label>
             <select
               name="district"
               value={formData.district}
               onChange={handleInputChange}
-              className={`w-full bg-white px-5 py-4 rounded-2xl border-2 transition-all outline-none font-bold text-gray-800 appearance-none shadow-sm ${
+              className={`w-full bg-white px-5 py-4 rounded-2xl border-2 transition-all outline-none font-bold text-gray-800 shadow-sm appearance-none ${
                 fieldErrors.district
                   ? "border-red-400 bg-red-50"
-                  : "border-transparent focus:border-orange-500"
+                  : "border-transparent focus:border-green-500"
               }`}
             >
               <option value="">Tumanni tanlang...</option>
@@ -274,39 +265,41 @@ const CheckoutPage = () => {
                 </option>
               ))}
             </select>
-            {fieldErrors.district && (
-              <span className="text-red-500 text-[10px] font-bold mt-1 ml-2">
-                {fieldErrors.district}
-              </span>
-            )}
           </div>
 
           <InputGroup
             label="Aniq manzil"
-            icon={<Navigation size={14} className="text-orange-500" />}
+            icon={<Navigation size={16} />}
             name="addressDetails"
             value={formData.addressDetails}
             onChange={handleInputChange}
             error={fieldErrors.addressDetails}
-            placeholder="Ko'cha, uy, xonadon, mo'ljal..."
+            placeholder="Ko'cha, uy raqami, xonadon..."
             isTextArea
           />
         </div>
 
-        <p className="text-center text-gray-400 text-[11px] mt-10 font-medium leading-relaxed px-10">
-          Tugmani bosish orqali siz buyurtmani tasdiqlaysiz. To'lov naqd
-          ko'rinishda qabul qilinadi.
-        </p>
+        {/* To'lov turi (Static for now) */}
+        <div className="bg-green-50 border border-green-100 rounded-2xl p-4 flex items-center gap-4">
+          <div className="bg-green-500 p-2 rounded-xl text-white">
+            <CreditCard size={20} />
+          </div>
+          <div>
+            <p className="text-[10px] font-black text-green-600 uppercase tracking-wider">
+              To'lov turi
+            </p>
+            <p className="text-sm font-bold text-green-900">Naqd pul orqali</p>
+          </div>
+        </div>
       </div>
     </div>
   );
 };
 
-// 🏗 Yordamchi Component
 const InputGroup = ({ label, icon, error, isTextArea, ...props }) => (
   <div className="flex flex-col">
-    <label className="flex items-center gap-2 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2 ml-2">
-      {icon} {label}
+    <label className="flex items-center gap-2 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2 ml-1">
+      <span className="text-green-500">{icon}</span> {label}
     </label>
     {isTextArea ? (
       <textarea
@@ -314,7 +307,7 @@ const InputGroup = ({ label, icon, error, isTextArea, ...props }) => (
         className={`w-full bg-white px-5 py-4 rounded-2xl border-2 transition-all outline-none font-bold text-gray-800 shadow-sm resize-none ${
           error
             ? "border-red-400 bg-red-50"
-            : "border-transparent focus:border-orange-500"
+            : "border-transparent focus:border-green-500"
         }`}
         rows="2"
       />
@@ -324,12 +317,12 @@ const InputGroup = ({ label, icon, error, isTextArea, ...props }) => (
         className={`w-full bg-white px-5 py-4 rounded-2xl border-2 transition-all outline-none font-bold text-gray-800 shadow-sm ${
           error
             ? "border-red-400 bg-red-50"
-            : "border-transparent focus:border-orange-500"
+            : "border-transparent focus:border-green-500"
         }`}
       />
     )}
     {error && (
-      <span className="text-red-500 text-[10px] font-bold mt-1 ml-2">
+      <span className="text-red-500 text-[10px] font-bold mt-1.5 ml-2">
         {error}
       </span>
     )}
