@@ -6,7 +6,7 @@ const API_URL = import.meta.env.VITE_API_BASE_URL;
 // 2. Axios uchun asosiy shablon (Client) yaratamiz
 const apiClient = axios.create({
   baseURL: API_URL,
-  timeout: 10000, // 10 soniyada javob kelmasa xato beradi
+  timeout: 30000, // 10 soniyada javob kelmasa xato beradi
 });
 
 // 3. INTERCEPTOR (So'rovni ushlab qolib, unga "pasport" qo'shib yuborish)

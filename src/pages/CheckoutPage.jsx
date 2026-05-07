@@ -6,6 +6,7 @@ import React, {
   useRef,
 } from "react";
 import { useNavigate } from "react-router-dom";
+import { User, Phone, MapPin, Navigation, ArrowLeft } from "lucide-react";
 import { AppContext } from "../context/AppContext";
 import { CartContext } from "../context/CartContext";
 import { useTelegram } from "../hooks/useTelegram";
@@ -25,9 +26,9 @@ const TASHKENT_DISTRICTS = [
   "Yunusobod",
   "Zangiota",
   "Yangihayot",
-];
+].sort();
 
-const DELIVERY_FEE = 10000; // Yetkazib berish narxi (Doimiy konstanta)
+const DELIVERY_FEE = 10000;
 
 const CheckoutPage = () => {
   const navigate = useNavigate();
@@ -38,35 +39,32 @@ const CheckoutPage = () => {
     totalQuantity = 0,
     clearCart,
   } = useContext(CartContext) || {};
-  const { tg, showMainButton, hideMainButton } = useTelegram();
+  const { tg } = useTelegram();
 
   const [formData, setFormData] = useState({
     customerName: user?.first_name || "",
-    customerPhone: "+998 ", // Boshlang'ich qiymat yo'nalish berish uchun
+    customerPhone: "+998 ",
     district: "",
     addressDetails: "",
   });
 
   const [fieldErrors, setFieldErrors] = useState({});
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const formDataRef = useRef(formData);
+  // Ref orqali callback ichida eng oxirgi loading holatini tekshiramiz
+  const loadingRef = useRef(loading);
   useEffect(() => {
-    formDataRef.current = formData;
-  }, [formData]);
+    loadingRef.current = loading;
+  }, [loading]);
 
-  // Jami hisob (Mahsulotlar + Dostavka)
   const finalTotalAmount = Number(totalPrice) + DELIVERY_FEE;
 
-  // 1. O'zbekiston telefon raqami uchun Maxsus Handler
+  // 📞 Telefon raqam formati (+998 XX XXX XX XX)
   const handlePhoneChange = (e) => {
-    let val = e.target.value.replace(/\D/g, ""); // Faqat raqamlarni olamiz
-
-    // Agar 998 dan boshlansa, uni olib tashlaymiz (chunki o'zimiz qo'shamiz)
+    let val = e.target.value.replace(/\D/g, "");
     if (val.startsWith("998")) val = val.substring(3);
-    val = val.substring(0, 9); // Maksimal 9 ta raqam (kod + raqam)
+    val = val.substring(0, 9);
 
-    // Formatlash: +998 90 123 45 67
     let formatted = "+998";
     if (val.length > 0) formatted += " " + val.substring(0, 2);
     if (val.length > 2) formatted += " " + val.substring(2, 5);
@@ -74,276 +72,268 @@ const CheckoutPage = () => {
     if (val.length > 7) formatted += " " + val.substring(7, 9);
 
     setFormData((prev) => ({ ...prev, customerPhone: formatted }));
-    if (fieldErrors.customerPhone)
-      setFieldErrors((prev) => ({ ...prev, customerPhone: null }));
+    setFieldErrors((prev) => ({ ...prev, customerPhone: null }));
   };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
-    if (fieldErrors[name])
-      setFieldErrors((prev) => ({ ...prev, [name]: null }));
+    setFieldErrors((prev) => ({ ...prev, [name]: null }));
   };
 
   const submitOrder = useCallback(async () => {
-    const currentData = formDataRef.current;
-    setFieldErrors({});
+    // Loading holatini ref orqali tekshirish (closure xatoligini oldini oladi)
+    if (loadingRef.current) return;
 
-    // Validatsiya
-    let localErrors = {};
-    if (currentData.customerPhone.length < 17)
-      // "+998 90 123 45 67" uzunligi 17 ta belgi
-      localErrors.customerPhone = "Telefon raqamni to'liq kiriting";
-    if (!currentData.district) localErrors.district = "Tuman tanlanishi shart";
-    if (!currentData.addressDetails)
-      localErrors.addressDetails = "Manzil kiritilishi shart";
+    let errors = {};
+    if (formData.customerName.trim().length < 3)
+      errors.customerName = "Ism juda qisqa";
+    if (formData.customerPhone.length < 17)
+      errors.customerPhone = "Raqam to'liq emas";
+    if (!formData.district) errors.district = "Tumanni tanlang";
+    if (formData.addressDetails.trim().length < 5)
+      errors.addressDetails = "Manzilni to'liqroq yozing";
 
-    if (Object.keys(localErrors).length > 0) {
-      setFieldErrors(localErrors);
-      tg.showAlert("Iltimos, barcha maydonlarni to'g'ri to'ldiring!");
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors);
+      tg.HapticFeedback.notificationOccurred("error");
       return;
     }
 
-    setIsSubmitting(true);
+    setLoading(true);
     tg.MainButton.showProgress();
+    tg.MainButton.disable();
 
     try {
-      const fullAddress = `${currentData.district} tumani, ${currentData.addressDetails.trim()}`;
-
-      // 2. 🔥 TO'G'RILANGAN PAYLOAD: Modifikatorlar va barcha narxlar
       const orderPayload = {
         tenantId,
-        customerId: user?.id || 123456789,
-        customerName: currentData.customerName.trim(),
-        customerPhone: currentData.customerPhone.replace(/\s/g, ""), // Bo'shliqlarni olib yuboramiz (+998901234567)
-        items: cartItems.map((item) => {
-          const modsSum =
-            item.selectedModifiers?.reduce(
-              (sum, m) => sum + (Number(m.price) || 0),
-              0,
-            ) || 0;
-          const itemBasePrice = Number(item.price) || 0;
-
-          return {
-            productId: item._id,
-            productName: item.name,
-            quantity: Number(item.quantity),
-            unitPrice: itemBasePrice,
-            selectedModifiers: item.selectedModifiers || [],
-            itemTotal: (itemBasePrice + modsSum) * Number(item.quantity),
-          };
-        }),
-        subTotal: Number(totalPrice),
+        customerId: user?.id || 0,
+        customerName: formData.customerName.trim(),
+        customerPhone: formData.customerPhone.replace(/\s/g, ""),
+        items: cartItems.map((item) => ({
+          productId: item._id,
+          productName: item.name,
+          quantity: Number(item.quantity),
+          unitPrice: Number(item.price),
+          selectedModifiers: item.selectedModifiers || [],
+          itemTotal:
+            (Number(item.price) +
+              (item.selectedModifiers?.reduce(
+                (s, m) => s + Number(m.price),
+                0,
+              ) || 0)) *
+            item.quantity,
+        })),
+        subTotal: totalPrice,
         deliveryFee: DELIVERY_FEE,
         totalAmount: finalTotalAmount,
         deliveryType: "DELIVERY",
-        deliveryAddress: { text: fullAddress },
+        deliveryAddress: {
+          text: `${formData.district} tumani, ${formData.addressDetails}`,
+        },
         paymentMethod: "CASH",
       };
 
-      const response = await apiClient.post("/orders", orderPayload);
+      const res = await apiClient.post("/orders", orderPayload);
 
-      if (response.success || response.order) {
+      if (res.data) {
+        tg.HapticFeedback.notificationOccurred("success");
+        clearCart();
         tg.showConfirm(
-          "✅ Buyurtmangiz qabul qilindi!\nTez orada siz bilan bog'lanamiz.",
-          (buttonPressed) => {
-            if (buttonPressed) {
-              clearCart();
-              tg.close();
-            }
+          "✅ Buyurtmangiz qabul qilindi! Botga qaytasizmi?",
+          (confirm) => {
+            if (confirm) tg.close();
+            else navigate("/");
           },
         );
       }
-    } catch (error) {
-      console.error("[CHECKOUT ERROR]", error);
-      if (error.response?.data?.details) {
-        const errors = {};
-        error.response.data.details.forEach((err) => {
-          errors[err.field] = err.message;
-        });
-        setFieldErrors(errors);
-        tg.showAlert("Ma'lumotlarda xatolik bor. Qayta tekshiring.");
-      } else {
-        tg.showAlert(
-          "Xatolik yuz berdi. Iltimos, keyinroq qayta urinib ko'ring.",
-        );
-      }
+    } catch (err) {
+      console.error("Order Error:", err);
+      tg.showAlert(
+        "⚠️ Server bilan bog'lanishda xato. Iltimos qayta urinib ko'ring.",
+      );
     } finally {
-      setIsSubmitting(false);
+      setLoading(false);
       tg.MainButton.hideProgress();
+      tg.MainButton.enable();
     }
-  }, [cartItems, tenantId, user, totalPrice, finalTotalAmount, tg, clearCart]);
+  }, [
+    formData,
+    cartItems,
+    tenantId,
+    user,
+    totalPrice,
+    finalTotalAmount,
+    tg,
+    clearCart,
+    navigate,
+  ]);
 
-  // MainButton ni jami summa bilan ko'rsatish
+  // 🔘 Telegram MainButton Boshqaruvi
   useEffect(() => {
-    if (!cartItems || cartItems.length === 0) {
+    if (!cartItems.length) {
       navigate("/");
       return;
     }
 
-    const priceText = finalTotalAmount.toLocaleString("uz-UZ");
-    showMainButton(`TASDIQLASH — ${priceText} so'm`, submitOrder);
+    const priceText = finalTotalAmount.toLocaleString("uz-UZ") + " so'm";
+
+    tg.MainButton.setParams({
+      text: `TASDIQLASH (${priceText})`,
+      color: "#31b545",
+      text_color: "#ffffff",
+      is_active: true,
+      is_visible: true,
+    });
+
+    tg.MainButton.onClick(submitOrder);
 
     return () => {
       tg.MainButton.offClick(submitOrder);
-      hideMainButton();
+      tg.MainButton.hide();
     };
-  }, [
-    cartItems.length,
-    finalTotalAmount,
-    submitOrder,
-    navigate,
-    showMainButton,
-    hideMainButton,
-    tg,
-  ]);
-
-  if (!cartItems || cartItems.length === 0) return null;
+  }, [finalTotalAmount, cartItems.length, submitOrder, tg, navigate]);
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-28 px-4 pt-4">
-      <button
-        onClick={() => navigate("/cart")}
-        className="flex items-center gap-2 text-orange-500 font-bold text-sm mb-6 active:scale-95 transition-transform uppercase tracking-widest"
-      >
-        ← Savatga qaytish
-      </button>
+    <div className="min-h-screen bg-gray-50 pb-32 animate-in fade-in duration-500">
+      <div className="p-4">
+        {/* Back Button */}
+        <button
+          onClick={() => navigate("/cart")}
+          className="flex items-center gap-2 text-gray-500 font-bold text-sm mb-6 active:scale-95 transition-transform"
+        >
+          <ArrowLeft size={16} /> Savatga qaytish
+        </button>
 
-      <h1 className="text-2xl font-black text-gray-900 mb-6 tracking-tight">
-        Buyurtmani tasdiqlash
-      </h1>
+        <h1 className="text-2xl font-black text-gray-900 mb-6">
+          Rasmiylashtirish
+        </h1>
 
-      {/* 3. 🔥 SHAFFOF CHEK UI */}
-      <div className="bg-white rounded-3xl p-5 shadow-sm border border-gray-100 mb-6 divide-y divide-gray-50">
-        <div className="flex justify-between py-2 items-center">
-          <span className="text-gray-500 font-medium text-sm">
-            Mahsulotlar ({totalQuantity} ta)
-          </span>
-          <span className="font-bold text-gray-800">
-            {totalPrice.toLocaleString("uz-UZ")} so'm
-          </span>
+        {/* CHEK */}
+        <div className="bg-white rounded-[28px] p-6 shadow-sm border border-gray-100 mb-8">
+          <div className="space-y-3">
+            <div className="flex justify-between text-gray-500 font-medium">
+              <span>Mahsulotlar ({totalQuantity})</span>
+              <span>{totalPrice.toLocaleString()} so'm</span>
+            </div>
+            <div className="flex justify-between text-gray-500 font-medium">
+              <span>Yetkazib berish</span>
+              <span>{DELIVERY_FEE.toLocaleString()} so'm</span>
+            </div>
+            <div className="h-[1px] bg-gray-100 my-2" />
+            <div className="flex justify-between items-end">
+              <span className="text-gray-900 font-bold">Jami:</span>
+              <span className="text-2xl font-black text-green-600">
+                {finalTotalAmount.toLocaleString()}{" "}
+                <small className="text-sm font-bold">so'm</small>
+              </span>
+            </div>
+          </div>
         </div>
-        <div className="flex justify-between py-2 items-center">
-          <span className="text-gray-500 font-medium text-sm">
-            Yetkazib berish haqi
-          </span>
-          <span className="font-bold text-gray-800">
-            {DELIVERY_FEE.toLocaleString("uz-UZ")} so'm
-          </span>
-        </div>
-        <div className="flex justify-between pt-4 pb-1 items-end mt-2">
-          <span className="text-gray-900 font-black text-sm uppercase tracking-wider">
-            Jami to'lov
-          </span>
-          <span className="font-black text-2xl text-orange-500">
-            {finalTotalAmount.toLocaleString("uz-UZ")}{" "}
-            <span className="text-sm">so'm</span>
-          </span>
-        </div>
-      </div>
 
-      <div className="space-y-4">
-        {/* Ism */}
-        <div>
-          <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 ml-1">
-            Ismingiz
-          </label>
-          <input
-            type="text"
+        {/* FORM SECTION */}
+        <div className="space-y-5">
+          <InputGroup
+            label="Ismingiz"
+            icon={<User size={14} className="text-orange-500" />}
             name="customerName"
-            placeholder="Ismingizni kiriting"
             value={formData.customerName}
             onChange={handleInputChange}
-            className={`w-full px-4 py-4 bg-white border ${
-              fieldErrors.customerName ? "border-red-500" : "border-gray-100"
-            } rounded-2xl focus:outline-none focus:border-orange-500 font-bold text-gray-800 transition-colors shadow-sm`}
+            error={fieldErrors.customerName}
+            placeholder="Ismingizni kiriting"
           />
-        </div>
 
-        {/* Telefon raqam maskasi bilan */}
-        <div>
-          <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 ml-1">
-            Telefon raqam <span className="text-orange-500">*</span>
-          </label>
-          <input
-            type="tel"
+          <InputGroup
+            label="Telefon raqam"
+            icon={<Phone size={14} className="text-orange-500" />}
             name="customerPhone"
-            placeholder="+998 90 123 45 67"
             value={formData.customerPhone}
-            onChange={handlePhoneChange} // Maxsus handler ulandi
-            maxLength={17}
-            className={`w-full px-4 py-4 bg-white border ${
-              fieldErrors.customerPhone ? "border-red-500" : "border-gray-100"
-            } rounded-2xl focus:outline-none focus:border-orange-500 font-bold text-gray-900 tracking-wider transition-colors shadow-sm`}
+            onChange={handlePhoneChange}
+            error={fieldErrors.customerPhone}
+            type="tel"
           />
-          {fieldErrors.customerPhone && (
-            <p className="text-red-500 text-[10px] font-bold mt-2 ml-2 animate-in fade-in">
-              ⚠️ {fieldErrors.customerPhone}
-            </p>
-          )}
-        </div>
 
-        {/* Tuman tanlash */}
-        <div>
-          <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 ml-1">
-            Tumaningizni tanlang <span className="text-orange-500">*</span>
-          </label>
-          <div className="relative">
+          <div className="flex flex-col">
+            <label className="flex items-center gap-2 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2 ml-2">
+              <MapPin size={14} className="text-orange-500" /> Tuman
+            </label>
             <select
               name="district"
               value={formData.district}
               onChange={handleInputChange}
-              className={`w-full px-4 py-4 bg-white border ${
-                fieldErrors.district ? "border-red-500" : "border-gray-100"
-              } rounded-2xl focus:outline-none focus:border-orange-500 font-bold text-gray-800 transition-colors shadow-sm appearance-none`}
+              className={`w-full bg-white px-5 py-4 rounded-2xl border-2 transition-all outline-none font-bold text-gray-800 appearance-none shadow-sm ${
+                fieldErrors.district
+                  ? "border-red-400 bg-red-50"
+                  : "border-transparent focus:border-orange-500"
+              }`}
             >
-              <option value="" disabled>
-                Toshkent shahri...
-              </option>
-              {TASHKENT_DISTRICTS.map((district) => (
-                <option key={district} value={district}>
-                  {district} tumani
+              <option value="">Tumanni tanlang...</option>
+              {TASHKENT_DISTRICTS.map((d) => (
+                <option key={d} value={d}>
+                  {d} tumani
                 </option>
               ))}
             </select>
-            {/* ... select icon ... */}
+            {fieldErrors.district && (
+              <span className="text-red-500 text-[10px] font-bold mt-1 ml-2">
+                {fieldErrors.district}
+              </span>
+            )}
           </div>
-          {fieldErrors.district && (
-            <p className="text-red-500 text-[10px] font-bold mt-2 ml-2 animate-in fade-in">
-              ⚠️ {fieldErrors.district}
-            </p>
-          )}
-        </div>
 
-        {/* Aniq manzil */}
-        <div>
-          <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2 ml-1">
-            Aniq manzil <span className="text-orange-500">*</span>
-          </label>
-          <textarea
+          <InputGroup
+            label="Aniq manzil"
+            icon={<Navigation size={14} className="text-orange-500" />}
             name="addressDetails"
-            placeholder="Ko'cha, uy, xonadon, mo'ljal..."
             value={formData.addressDetails}
             onChange={handleInputChange}
-            rows={2}
-            className={`w-full px-4 py-4 bg-white border ${
-              fieldErrors.addressDetails ? "border-red-500" : "border-gray-100"
-            } rounded-2xl focus:outline-none focus:border-orange-500 font-bold text-gray-800 transition-colors shadow-sm resize-none`}
+            error={fieldErrors.addressDetails}
+            placeholder="Ko'cha, uy, xonadon, mo'ljal..."
+            isTextArea
           />
-          {fieldErrors.addressDetails && (
-            <p className="text-red-500 text-[10px] font-bold mt-2 ml-2 animate-in fade-in">
-              ⚠️ {fieldErrors.addressDetails}
-            </p>
-          )}
         </div>
-      </div>
 
-      <p className="text-center text-gray-400 font-medium text-xs mt-8 mb-4 flex items-center justify-center gap-2">
-        <span className="text-lg">💵</span> To'lov yetkazib berilgandan so'ng
-        amalga oshiriladi
-      </p>
+        <p className="text-center text-gray-400 text-[11px] mt-10 font-medium leading-relaxed px-10">
+          Tugmani bosish orqali siz buyurtmani tasdiqlaysiz. To'lov naqd
+          ko'rinishda qabul qilinadi.
+        </p>
+      </div>
     </div>
   );
 };
+
+// 🏗 Yordamchi Component
+const InputGroup = ({ label, icon, error, isTextArea, ...props }) => (
+  <div className="flex flex-col">
+    <label className="flex items-center gap-2 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2 ml-2">
+      {icon} {label}
+    </label>
+    {isTextArea ? (
+      <textarea
+        {...props}
+        className={`w-full bg-white px-5 py-4 rounded-2xl border-2 transition-all outline-none font-bold text-gray-800 shadow-sm resize-none ${
+          error
+            ? "border-red-400 bg-red-50"
+            : "border-transparent focus:border-orange-500"
+        }`}
+        rows="2"
+      />
+    ) : (
+      <input
+        {...props}
+        className={`w-full bg-white px-5 py-4 rounded-2xl border-2 transition-all outline-none font-bold text-gray-800 shadow-sm ${
+          error
+            ? "border-red-400 bg-red-50"
+            : "border-transparent focus:border-orange-500"
+        }`}
+      />
+    )}
+    {error && (
+      <span className="text-red-500 text-[10px] font-bold mt-1 ml-2">
+        {error}
+      </span>
+    )}
+  </div>
+);
 
 export default CheckoutPage;
